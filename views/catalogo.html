@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Catalogo de Papeleria</title>
+    <link rel="stylesheet" href="assets/css/catalogo.css" />
+  </head>
+  <body>
+    <main class="wrapper">
+      <header class="page-header">
+        <h1>Catalogo de Productos</h1>
+        <p>Oficinas internas - Solicitud de papeleria</p>
+      </header>
+
+      <section class="panel user-data">
+        <h2>Datos de la solicitud</h2>
+        <div class="form-grid">
+          <label>
+            ID Usuario
+            <input type="number" id="idUsuario" min="1" value="2" required />
+          </label>
+          <label>
+            ID Oficina
+            <input type="number" id="idOficina" min="1" value="1" required />
+          </label>
+        </div>
+        <label class="obs-field">
+          Observaciones
+          <textarea
+            id="observaciones"
+            rows="2"
+            placeholder="Opcional"
+          ></textarea>
+        </label>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Productos disponibles</h2>
+          <button id="btnRecargar" type="button">Recargar</button>
+        </div>
+        <div class="filters-bar">
+          <label>
+            Buscar (nombre o SKU)
+            <input
+              type="text"
+              id="filtroBusqueda"
+              placeholder="Ej: resma, PAP-001"
+            />
+          </label>
+          <label class="stock-filter">
+            <input type="checkbox" id="filtroConStock" />
+            Solo mostrar con stock
+          </label>
+          <button type="button" id="btnLimpiarFiltros" class="btn-secondary">
+            Limpiar filtros
+          </button>
+        </div>
+        <div id="catalogoGrid" class="catalogo-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Carrito</h2>
+        </div>
+        <div id="carritoVacio" class="empty-state">
+          Aun no hay productos en el carrito.
+        </div>
+        <div id="carritoContenido" class="hidden">
+          <table class="cart-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Accion</th>
+              </tr>
+            </thead>
+            <tbody id="carritoBody"></tbody>
+          </table>
+          <div class="cart-footer">
+            <strong>Total items: <span id="totalItems">0</span></strong>
+            <button id="btnConfirmarPedido" type="button" class="btn-primary">
+              Confirmar pedido
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel status-panel">
+        <h2>Estado</h2>
+        <p id="mensajeEstado">Listo para operar.</p>
+      </section>
+    </main>
+
+    <script src="assets/js/catalogo.js" defer></script>
+  </body>
+</html>
