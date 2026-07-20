@@ -14,5 +14,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
   exit;
 }
 
-$controller = new PedidoController();
-$controller->guardarDesdeCarrito();
+try {
+  $controller = new PedidoController();
+  $controller->guardarDesdeCarrito();
+} catch (Throwable $e) {
+  error_log('Error API guardar_pedido: ' . $e->getMessage());
+  http_response_code(500);
+  header('Content-Type: application/json; charset=utf-8');
+  echo json_encode([
+    'ok' => false,
+    'mensaje' => 'Error de conexion o inicializacion del servidor.',
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
