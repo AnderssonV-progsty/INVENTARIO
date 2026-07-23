@@ -74,4 +74,77 @@ final class PedidoModel
       throw $e;
     }
   }
+
+  public function obtenerPedidosPendientesConDetalle(): array
+  {
+    $sql = "
+            SELECT
+                p.id_pedido,
+                p.id_oficina,
+                o.nombre AS nombre_oficina,
+                p.fecha_pedido,
+                d.id_producto,
+                pr.sku,
+                pr.nombre AS nombre_producto,
+                d.cantidad
+            FROM pedidos p
+            INNER JOIN oficinas o ON o.id_oficina = p.id_oficina
+            INNER JOIN detalle_pedidos d ON d.id_pedido = p.id_pedido
+            INNER JOIN productos pr ON pr.id_producto = d.id_producto
+            WHERE p.estado = 'PENDIENTE'
+            ORDER BY p.fecha_pedido ASC, p.id_pedido ASC, d.id_detalle ASC
+        ";
+
+    $stmt = $this->pdo->query($sql);
+    $rows = $stmt->fetchAll();
+
+    $pedidos = [];
+
+    foreach ($rows as $row) {
+      $idPedido = (int) $row['id_pedido'];
+
+      if (!isset($pedidos[$idPedido])) {
+        $pedidos[$idPedido] = [
+          'id_pedido' => $idPedido,
+          'id_oficina' => (int) $row['id_oficina'],
+          'nombre_oficina' => (string) $row['nombre_oficina'],
+          'fecha_pedido' => (string) $row['fecha_pedido'],
+          'items' => [],
+        ];
+      }
+
+      $pedidos[$idPedido]['items'][] = [
+        'id_producto' => (int) $row['id_producto'],
+        'sku' => (string) $row['sku'],
+        'nombre_producto' => (string) $row['nombre_producto'],
+        'cantidad' => (int) $row['cantidad'],
+      ];
+    }
+
+    return array_values($pedidos);
+  }
+
+  public function marcarPedidoEntregado(int $idPedido): bool
+  {
+    $sql = "
+            UPDATE pedidos
+            SET estado = 'ENTREGADO'
+            WHERE id_pedido = :id_pedido
+              AND estado = 'PENDIENTE'
+        ";
+
+    $stmt = $this->pdo->prepare($sql);
+    $stmt->execute([':id_pedido' => $idPedido]);
+
+    return $stmt->rowCount() > 0;
+  }
+
+  public function existePedido(int $idPedido): bool
+  {
+    $sql = "SELECT 1 FROM pedidos WHERE id_pedido = :id_pedido LIMIT 1";
+    $stmt = $this->pdo->prepare($sql);
+    $stmt->execute([':id_pedido' => $idPedido]);
+
+    return (bool) $stmt->fetchColumn();
+  }
 }

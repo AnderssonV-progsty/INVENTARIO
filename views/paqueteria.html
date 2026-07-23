@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paqueteria - Pedidos Pendientes</title>
+    <link rel="stylesheet" href="assets/css/catalogo.css" />
+    <style>
+      .pedido-card {
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        padding: 1rem;
+        background: #ffffff;
+      }
+
+      .pedido-grid {
+        display: grid;
+        gap: 0.8rem;
+      }
+
+      .pedido-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.8rem;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .pedido-title {
+        margin: 0;
+      }
+
+      .pedido-meta {
+        margin: 0.3rem 0 0;
+        color: #475569;
+      }
+
+      .items-list {
+        margin: 0.8rem 0 0;
+        padding-left: 1.1rem;
+      }
+
+      .empty-list {
+        margin: 0;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrapper">
+      <header class="page-header">
+        <h1>Vista de Paqueteria</h1>
+        <p>Gestion de pedidos pendientes para despacho</p>
+      </header>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Navegacion</h2>
+          <a href="catalogo.html" class="btn-secondary">Ir a vista Catalogo</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Pedidos Pendientes</h2>
+          <button id="btnRecargar" type="button">Recargar</button>
+        </div>
+        <div id="pedidosContainer" class="pedido-grid"></div>
+      </section>
+
+      <section class="panel status-panel">
+        <h2>Estado</h2>
+        <p id="mensajeEstado">Listo para operar.</p>
+      </section>
+    </main>
+
+    <script src="assets/js/api-config.js" defer></script>
+    <script src="assets/js/paqueteria.js" defer></script>
+  </body>
+</html>

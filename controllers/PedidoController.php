@@ -73,6 +73,89 @@ final class PedidoController
     }
   }
 
+  public function pendientes(): void
+  {
+    try {
+      $pedidos = $this->pedidoModel->obtenerPedidosPendientesConDetalle();
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Pedidos pendientes obtenidos correctamente.',
+        'data' => $pedidos,
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error al consultar pedidos pendientes: ' . $e->getMessage());
+
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible consultar los pedidos pendientes.',
+      ]);
+    }
+  }
+
+  public function entregarDesdeJson(): void
+  {
+    try {
+      $input = json_decode(file_get_contents('php://input') ?: '', true, 512, JSON_THROW_ON_ERROR);
+      $idPedido = isset($input['id_pedido']) ? (int) $input['id_pedido'] : 0;
+
+      if ($idPedido <= 0) {
+        throw new InvalidArgumentException('id_pedido es obligatorio.');
+      }
+
+      $actualizado = $this->pedidoModel->marcarPedidoEntregado($idPedido);
+
+      if (!$actualizado) {
+        if (!$this->pedidoModel->existePedido($idPedido)) {
+          $this->responderJson(404, [
+            'ok' => false,
+            'mensaje' => 'El pedido no existe.',
+          ]);
+          return;
+        }
+
+        $this->responderJson(409, [
+          'ok' => false,
+          'mensaje' => 'El pedido no esta en estado PENDIENTE.',
+        ]);
+        return;
+      }
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Pedido despachado correctamente.',
+        'data' => [
+          'id_pedido' => $idPedido,
+          'estado' => 'ENTREGADO',
+        ],
+      ]);
+    } catch (JsonException $e) {
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => 'JSON invalido en la solicitud.',
+      ]);
+    } catch (InvalidArgumentException $e) {
+      $this->responderJson(422, [
+        'ok' => false,
+        'mensaje' => $e->getMessage(),
+      ]);
+    } catch (PDOException $e) {
+      error_log('Error BD al despachar pedido: ' . $e->getMessage());
+
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => 'No fue posible despachar el pedido: ' . $e->getMessage(),
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error inesperado al despachar pedido: ' . $e->getMessage());
+
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'Error interno del servidor.',
+      ]);
+    }
+  }
+
   private function responderJson(int $statusCode, array $payload): void
   {
     http_response_code($statusCode);

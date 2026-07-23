@@ -3,22 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Catalogo de Papeleria</title>
+    <title>Directivos - Solicitud de Papeleria</title>
     <link rel="stylesheet" href="assets/css/catalogo.css" />
   </head>
   <body>
     <main class="wrapper">
       <header class="page-header">
-        <h1>Catalogo de Productos</h1>
-        <p>Oficinas internas - Solicitud de papeleria</p>
+        <h1>Portal de Directivos</h1>
+        <p>Realiza solicitudes de papeleria para tu area</p>
       </header>
 
       <section class="panel">
         <div class="section-title">
           <h2>Navegacion</h2>
-          <a href="directivos.html" class="btn-secondary"
-            >Ir a vista Directivos</a
-          >
+          <a href="catalogo.html" class="btn-secondary">Ir a vista Catalogo</a>
         </div>
       </section>
 
@@ -34,14 +32,6 @@
             <input type="number" id="idOficina" min="1" value="1" required />
           </label>
         </div>
-        <label class="obs-field">
-          Observaciones
-          <textarea
-            id="observaciones"
-            rows="2"
-            placeholder="Opcional"
-          ></textarea>
-        </label>
       </section>
 
       <section class="panel">
@@ -58,10 +48,6 @@
               placeholder="Ej: resma, PAP-001"
             />
           </label>
-          <label class="stock-filter">
-            <input type="checkbox" id="filtroConStock" />
-            Solo mostrar con stock
-          </label>
           <button type="button" id="btnLimpiarFiltros" class="btn-secondary">
             Limpiar filtros
           </button>
@@ -71,7 +57,7 @@
 
       <section class="panel">
         <div class="section-title">
-          <h2>Carrito</h2>
+          <h2>Carrito de compras</h2>
         </div>
         <div id="carritoVacio" class="empty-state">
           Aun no hay productos en el carrito.
@@ -90,7 +76,7 @@
           <div class="cart-footer">
             <strong>Total items: <span id="totalItems">0</span></strong>
             <button id="btnConfirmarPedido" type="button" class="btn-primary">
-              Confirmar pedido
+              Confirmar Pedido
             </button>
           </div>
         </div>
@@ -103,6 +89,6 @@
     </main>
 
     <script src="assets/js/api-config.js" defer></script>
-    <script src="assets/js/catalogo.js" defer></script>
+    <script src="assets/js/directivos.js" defer></script>
   </body>
 </html>
