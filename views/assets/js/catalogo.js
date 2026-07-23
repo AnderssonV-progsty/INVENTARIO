@@ -1,5 +1,6 @@
-const API_CATALOGO = "../api/catalogo.php";
-const API_GUARDAR_PEDIDO = "../api/guardar_pedido.php";
+const API_BASE = (window.API_BASE || "../api").replace(/\/+$/, "");
+const API_CATALOGO = `${API_BASE}/catalogo.php`;
+const API_GUARDAR_PEDIDO = `${API_BASE}/guardar_pedido.php`;
 
 const state = {
   productos: [],
