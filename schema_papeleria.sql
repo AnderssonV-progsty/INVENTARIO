@@ -224,6 +224,79 @@ END$$
 
 DELIMITER ;
 
+-- Migración segura para soportar áreas, roles y nuevos estados de pedido
+-- (No borra datos; solo agrega compatibilidad)
+CREATE TABLE IF NOT EXISTS areas (
+  id_area INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(120) NOT NULL,
+  codigo VARCHAR(20) NOT NULL,
+  activa TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_areas_nombre (nombre),
+  UNIQUE KEY uq_areas_codigo (codigo)
+) ENGINE=InnoDB;
+
+INSERT INTO areas (id_area, nombre, codigo, activa, created_at, updated_at)
+SELECT id_oficina, nombre, codigo, activa, created_at, updated_at
+FROM oficinas
+WHERE NOT EXISTS (
+  SELECT 1 FROM areas a WHERE a.id_area = oficinas.id_oficina
+);
+
+ALTER TABLE usuarios
+  ADD COLUMN id_area INT UNSIGNED NULL AFTER id_oficina;
+
+UPDATE usuarios u
+JOIN areas a ON a.id_area = u.id_oficina
+SET u.id_area = u.id_oficina
+WHERE u.id_area IS NULL AND u.id_oficina IS NOT NULL;
+
+ALTER TABLE usuarios
+  ADD CONSTRAINT fk_usuarios_area
+    FOREIGN KEY (id_area)
+    REFERENCES areas(id_area)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL;
+
+ALTER TABLE usuarios
+  MODIFY COLUMN rol ENUM('inventarista','director','operario','paqueteria','OFICINA','ADMIN_ALMACEN') NOT NULL DEFAULT 'operario';
+
+UPDATE usuarios
+SET rol = CASE
+  WHEN rol = 'ADMIN_ALMACEN' THEN 'director'
+  WHEN rol = 'OFICINA' THEN 'operario'
+  ELSE rol
+END
+WHERE rol IN ('ADMIN_ALMACEN','OFICINA');
+
+ALTER TABLE usuarios
+  MODIFY COLUMN rol ENUM('inventarista','director','operario','paqueteria') NOT NULL DEFAULT 'operario';
+
+CREATE TABLE IF NOT EXISTS producto_area (
+  id_producto INT UNSIGNED NOT NULL,
+  id_area INT UNSIGNED NOT NULL,
+  PRIMARY KEY (id_producto, id_area),
+  KEY idx_producto_area_area (id_area),
+  CONSTRAINT fk_producto_area_producto
+    FOREIGN KEY (id_producto)
+    REFERENCES productos(id_producto)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE,
+  CONSTRAINT fk_producto_area_area
+    FOREIGN KEY (id_area)
+    REFERENCES areas(id_area)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+UPDATE pedidos
+SET estado = 'PENDIENTE_APROBACION'
+WHERE estado = 'CANCELADO';
+
+ALTER TABLE pedidos
+  MODIFY COLUMN estado ENUM('PENDIENTE_APROBACION','PENDIENTE','ENTREGADO') NOT NULL DEFAULT 'PENDIENTE_APROBACION';
+
 -- Datos mínimos de ejemplo (opcional)
 INSERT INTO oficinas (nombre, codigo) VALUES
 ('Oficina Administrativa', 'ADM'),
