@@ -43,7 +43,7 @@ final class PedidoController
         'mensaje' => 'Pedido guardado correctamente.',
         'data' => [
           'id_pedido' => $idPedido,
-          'estado' => 'PENDIENTE',
+          'estado' => 'PENDIENTE_APROBACION',
         ],
       ]);
     } catch (JsonException $e) {
@@ -76,7 +76,12 @@ final class PedidoController
   public function pendientes(): void
   {
     try {
-      $pedidos = $this->pedidoModel->obtenerPedidosPendientesConDetalle();
+      $idOficina = null;
+      if (isset($_GET['id_oficina']) && $_GET['id_oficina'] !== '') {
+        $idOficina = (int) $_GET['id_oficina'];
+      }
+
+      $pedidos = $this->pedidoModel->obtenerPedidosPendientesConDetalle($idOficina);
 
       $this->responderJson(200, [
         'ok' => true,
@@ -89,6 +94,53 @@ final class PedidoController
       $this->responderJson(500, [
         'ok' => false,
         'mensaje' => 'No fue posible consultar los pedidos pendientes.',
+      ]);
+    }
+  }
+
+  public function aprobarYUnificarDesdeJson(): void
+  {
+    try {
+      $input = json_decode(file_get_contents('php://input') ?: '', true, 512, JSON_THROW_ON_ERROR);
+      $idsPedido = $this->normalizarIdsPedido($input);
+
+      if ($idsPedido === []) {
+        throw new InvalidArgumentException('Debes seleccionar al menos un pedido.');
+      }
+
+      $idPedidoUnificado = $this->pedidoModel->aprobarYUnificar($idsPedido);
+
+      $this->responderJson(201, [
+        'ok' => true,
+        'mensaje' => 'Pedidos aprobados y unificados correctamente.',
+        'data' => [
+          'id_pedido_unificado' => $idPedidoUnificado,
+          'ids_origen' => $idsPedido,
+        ],
+      ]);
+    } catch (JsonException $e) {
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => 'JSON invalido en la solicitud.',
+      ]);
+    } catch (InvalidArgumentException $e) {
+      $this->responderJson(422, [
+        'ok' => false,
+        'mensaje' => $e->getMessage(),
+      ]);
+    } catch (PDOException $e) {
+      error_log('Error BD al aprobar y unificar pedidos: ' . $e->getMessage());
+
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => 'No fue posible aprobar y unificar los pedidos: ' . $e->getMessage(),
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error inesperado al aprobar y unificar pedidos: ' . $e->getMessage());
+
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'Error interno del servidor.',
       ]);
     }
   }
@@ -161,5 +213,36 @@ final class PedidoController
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  }
+
+  private function normalizarIdsPedido(mixed $input): array
+  {
+    if (!is_array($input)) {
+      return [];
+    }
+
+    $candidatos = [];
+    foreach (['id_pedido', 'id_pedidos', 'ids'] as $clave) {
+      if (!isset($input[$clave])) {
+        continue;
+      }
+
+      $valor = $input[$clave];
+      if (is_int($valor) || is_string($valor) && trim((string) $valor) !== '') {
+        $candidatos[] = $valor;
+      } elseif (is_array($valor)) {
+        $candidatos = array_merge($candidatos, $valor);
+      }
+    }
+
+    $ids = [];
+    foreach ($candidatos as $valor) {
+      $id = (int) $valor;
+      if ($id > 0) {
+        $ids[] = $id;
+      }
+    }
+
+    return array_values(array_unique($ids));
   }
 }

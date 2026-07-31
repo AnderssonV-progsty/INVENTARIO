@@ -46,7 +46,7 @@ function renderPedidos() {
 
   if (state.pedidos.length === 0) {
     refs.pedidosContainer.innerHTML =
-      '<p class="empty-list">No hay pedidos en estado PENDIENTE.</p>';
+      '<p class="empty-list">No hay pedidos en estado pendiente o en aprobación.</p>';
     return;
   }
 

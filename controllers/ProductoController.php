@@ -16,12 +16,28 @@ final class ProductoController
   public function catalogo(): void
   {
     try {
-      $productos = $this->productoModel->obtenerCatalogo();
+      $idUsuario = $this->normalizarIdOpcional($_GET['id_usuario'] ?? null);
+      $idArea = $this->normalizarIdOpcional($_GET['id_area'] ?? null);
+
+      if ($idArea === null && $idUsuario !== null) {
+        $usuario = $this->productoModel->obtenerUsuarioPorId($idUsuario);
+        if ($usuario !== null) {
+          $idArea = $this->normalizarIdOpcional($usuario['id_area'] ?? null);
+        }
+      }
+
+      $productos = $idArea !== null
+        ? $this->productoModel->obtenerCatalogoPorArea($idArea)
+        : $this->productoModel->obtenerCatalogo();
 
       $this->responderJson(200, [
         'ok' => true,
         'mensaje' => 'Catalogo obtenido correctamente.',
         'data' => $productos,
+        'meta' => [
+          'id_area' => $idArea,
+          'id_usuario' => $idUsuario,
+        ],
       ]);
     } catch (Throwable $e) {
       error_log('Error catalogo: ' . $e->getMessage());
@@ -60,6 +76,7 @@ final class ProductoController
       $sku = strtoupper(trim((string) ($payload['sku'] ?? '')));
       $nombre = trim((string) ($payload['nombre'] ?? ''));
       $stockActual = $this->validarStock($payload['stock_actual'] ?? null);
+      $areas = $this->normalizarIds($payload['areas'] ?? []);
 
       if ($sku === '' || $nombre === '') {
         $this->responderJson(400, [
@@ -69,7 +86,7 @@ final class ProductoController
         return;
       }
 
-      $idProducto = $this->productoModel->crearProducto($sku, $nombre, $stockActual);
+      $idProducto = $this->productoModel->crearProducto($sku, $nombre, $stockActual, $areas);
       $producto = $this->productoModel->obtenerPorId($idProducto);
 
       $this->responderJson(201, [
@@ -101,6 +118,7 @@ final class ProductoController
       $sku = strtoupper(trim((string) ($payload['sku'] ?? '')));
       $nombre = trim((string) ($payload['nombre'] ?? ''));
       $stockActual = $this->validarStock($payload['stock_actual'] ?? null);
+      $areas = $this->normalizarIds($payload['areas'] ?? []);
 
       if ($idProducto <= 0) {
         $this->responderJson(400, [
@@ -127,7 +145,7 @@ final class ProductoController
         return;
       }
 
-      $this->productoModel->actualizarProducto($idProducto, $sku, $nombre, $stockActual);
+      $this->productoModel->actualizarProducto($idProducto, $sku, $nombre, $stockActual, $areas);
       $producto = $this->productoModel->obtenerPorId($idProducto);
 
       $this->responderJson(200, [
@@ -253,6 +271,328 @@ final class ProductoController
     }
   }
 
+  public function listarAreas(): void
+  {
+    try {
+      $areas = $this->productoModel->obtenerAreas();
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Áreas obtenidas correctamente.',
+        'data' => $areas,
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error listar áreas: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible obtener las áreas.',
+      ]);
+    }
+  }
+
+  public function crearArea(): void
+  {
+    try {
+      $payload = $this->leerJsonRequest();
+      $nombre = trim((string) ($payload['nombre'] ?? ''));
+      $codigo = strtoupper(trim((string) ($payload['codigo'] ?? '')));
+      $activa = (bool) ($payload['activa'] ?? true);
+
+      if ($nombre === '' || $codigo === '') {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'Nombre y código son obligatorios.',
+        ]);
+        return;
+      }
+
+      $idArea = $this->productoModel->crearArea($nombre, $codigo, $activa);
+      $area = $this->productoModel->obtenerAreaPorId($idArea);
+
+      $this->responderJson(201, [
+        'ok' => true,
+        'mensaje' => 'Área creada correctamente.',
+        'data' => $area,
+      ]);
+    } catch (InvalidArgumentException $e) {
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => $e->getMessage(),
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error crear área: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible crear el área.',
+      ]);
+    }
+  }
+
+  public function actualizarArea(): void
+  {
+    try {
+      $payload = $this->leerJsonRequest();
+      $idArea = (int) ($payload['id_area'] ?? 0);
+      $nombre = trim((string) ($payload['nombre'] ?? ''));
+      $codigo = strtoupper(trim((string) ($payload['codigo'] ?? '')));
+      $activa = (bool) ($payload['activa'] ?? true);
+
+      if ($idArea <= 0) {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'id_area es obligatorio y debe ser mayor a 0.',
+        ]);
+        return;
+      }
+
+      if ($nombre === '' || $codigo === '') {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'Nombre y código son obligatorios.',
+        ]);
+        return;
+      }
+
+      $areaActual = $this->productoModel->obtenerAreaPorId($idArea);
+      if ($areaActual === null) {
+        $this->responderJson(404, [
+          'ok' => false,
+          'mensaje' => 'Área no encontrada.',
+        ]);
+        return;
+      }
+
+      $this->productoModel->actualizarArea($idArea, $nombre, $codigo, $activa);
+      $area = $this->productoModel->obtenerAreaPorId($idArea);
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Área actualizada correctamente.',
+        'data' => $area,
+      ]);
+    } catch (InvalidArgumentException $e) {
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => $e->getMessage(),
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error actualizar área: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible actualizar el área.',
+      ]);
+    }
+  }
+
+  public function eliminarArea(): void
+  {
+    try {
+      $payload = $this->leerJsonRequest();
+      $idArea = (int) ($payload['id_area'] ?? 0);
+
+      if ($idArea <= 0) {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'id_area es obligatorio y debe ser mayor a 0.',
+        ]);
+        return;
+      }
+
+      $areaActual = $this->productoModel->obtenerAreaPorId($idArea);
+      if ($areaActual === null) {
+        $this->responderJson(404, [
+          'ok' => false,
+          'mensaje' => 'Área no encontrada.',
+        ]);
+        return;
+      }
+
+      $this->productoModel->eliminarArea($idArea);
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Área eliminada correctamente.',
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error eliminar área: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible eliminar el área.',
+      ]);
+    }
+  }
+
+  public function listarUsuarios(): void
+  {
+    try {
+      $usuarios = $this->productoModel->obtenerUsuarios();
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Usuarios obtenidos correctamente.',
+        'data' => $usuarios,
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error listar usuarios: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible obtener los usuarios.',
+      ]);
+    }
+  }
+
+  public function crearUsuario(): void
+  {
+    try {
+      $payload = $this->leerJsonRequest();
+      $username = trim((string) ($payload['username'] ?? ''));
+      $nombreCompleto = trim((string) ($payload['nombre_completo'] ?? ''));
+      $email = trim((string) ($payload['email'] ?? ''));
+      $rol = strtolower(trim((string) ($payload['rol'] ?? '')));
+      $idArea = $this->normalizarIdOpcional($payload['id_area'] ?? null);
+
+      if ($username === '' || $nombreCompleto === '') {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'Usuario y nombre completo son obligatorios.',
+        ]);
+        return;
+      }
+
+      $rolesPermitidos = ['inventarista', 'director', 'operario', 'paqueteria'];
+      if (!in_array($rol, $rolesPermitidos, true)) {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'Rol invalido. Use inventarista, director, operario o paqueteria.',
+        ]);
+        return;
+      }
+
+      $idUsuario = $this->productoModel->crearUsuario($username, $nombreCompleto, $email, $rol, $idArea);
+      $usuario = $this->productoModel->obtenerUsuarioPorId($idUsuario);
+
+      $this->responderJson(201, [
+        'ok' => true,
+        'mensaje' => 'Usuario creado correctamente.',
+        'data' => $usuario,
+      ]);
+    } catch (InvalidArgumentException $e) {
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => $e->getMessage(),
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error crear usuario: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible crear el usuario.',
+      ]);
+    }
+  }
+
+  public function actualizarUsuario(): void
+  {
+    try {
+      $payload = $this->leerJsonRequest();
+      $idUsuario = (int) ($payload['id_usuario'] ?? 0);
+      $username = trim((string) ($payload['username'] ?? ''));
+      $nombreCompleto = trim((string) ($payload['nombre_completo'] ?? ''));
+      $email = trim((string) ($payload['email'] ?? ''));
+      $rol = strtolower(trim((string) ($payload['rol'] ?? '')));
+      $idArea = $this->normalizarIdOpcional($payload['id_area'] ?? null);
+
+      if ($idUsuario <= 0) {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'id_usuario es obligatorio y debe ser mayor a 0.',
+        ]);
+        return;
+      }
+
+      if ($username === '' || $nombreCompleto === '') {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'Usuario y nombre completo son obligatorios.',
+        ]);
+        return;
+      }
+
+      $rolesPermitidos = ['inventarista', 'director', 'operario', 'paqueteria'];
+      if (!in_array($rol, $rolesPermitidos, true)) {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'Rol invalido. Use inventarista, director, operario o paqueteria.',
+        ]);
+        return;
+      }
+
+      $usuarioActual = $this->productoModel->obtenerUsuarioPorId($idUsuario);
+      if ($usuarioActual === null) {
+        $this->responderJson(404, [
+          'ok' => false,
+          'mensaje' => 'Usuario no encontrado.',
+        ]);
+        return;
+      }
+
+      $this->productoModel->actualizarUsuario($idUsuario, $username, $nombreCompleto, $email, $rol, $idArea);
+      $usuario = $this->productoModel->obtenerUsuarioPorId($idUsuario);
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Usuario actualizado correctamente.',
+        'data' => $usuario,
+      ]);
+    } catch (InvalidArgumentException $e) {
+      $this->responderJson(400, [
+        'ok' => false,
+        'mensaje' => $e->getMessage(),
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error actualizar usuario: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible actualizar el usuario.',
+      ]);
+    }
+  }
+
+  public function eliminarUsuario(): void
+  {
+    try {
+      $payload = $this->leerJsonRequest();
+      $idUsuario = (int) ($payload['id_usuario'] ?? 0);
+
+      if ($idUsuario <= 0) {
+        $this->responderJson(400, [
+          'ok' => false,
+          'mensaje' => 'id_usuario es obligatorio y debe ser mayor a 0.',
+        ]);
+        return;
+      }
+
+      $usuarioActual = $this->productoModel->obtenerUsuarioPorId($idUsuario);
+      if ($usuarioActual === null) {
+        $this->responderJson(404, [
+          'ok' => false,
+          'mensaje' => 'Usuario no encontrado.',
+        ]);
+        return;
+      }
+
+      $this->productoModel->eliminarUsuario($idUsuario);
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Usuario eliminado correctamente.',
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error eliminar usuario: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible eliminar el usuario.',
+      ]);
+    }
+  }
+
   private function leerJsonRequest(): array
   {
     $rawBody = file_get_contents('php://input');
@@ -282,6 +622,33 @@ final class ProductoController
     return $stock;
   }
 
+  private function normalizarIds(mixed $valor): array
+  {
+    if (!is_array($valor)) {
+      return [];
+    }
+
+    $ids = [];
+    foreach ($valor as $id) {
+      $idEntero = (int) $id;
+      if ($idEntero > 0) {
+        $ids[] = $idEntero;
+      }
+    }
+
+    return array_values(array_unique($ids));
+  }
+
+  private function normalizarIdOpcional(mixed $valor): ?int
+  {
+    if ($valor === null || $valor === '') {
+      return null;
+    }
+
+    $id = (int) $valor;
+    return $id > 0 ? $id : null;
+  }
+
   private function manejarErrorPdo(PDOException $e, string $mensajeGeneral): void
   {
     error_log($mensajeGeneral . ' ' . $e->getMessage());
@@ -289,7 +656,7 @@ final class ProductoController
     if (($e->errorInfo[0] ?? '') === '23000') {
       $this->responderJson(409, [
         'ok' => false,
-        'mensaje' => 'Ya existe un producto con ese SKU.',
+        'mensaje' => 'Ya existe un registro con esos datos.',
       ]);
       return;
     }

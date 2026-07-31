@@ -30,23 +30,52 @@
         min-width: 240px;
       }
 
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .tab-btn {
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        border-radius: 999px;
+        padding: 0.5rem 0.9rem;
+        cursor: pointer;
+      }
+
+      .tab-btn.active {
+        background: #2563eb;
+        color: #ffffff;
+        border-color: #2563eb;
+      }
+
+      .tab-panel.hidden {
+        display: none !important;
+      }
+
       .table-wrapper {
         overflow-x: auto;
       }
 
-      .inventory-table {
+      .inventory-table,
+      .crud-table {
         width: 100%;
         border-collapse: collapse;
       }
 
       .inventory-table th,
-      .inventory-table td {
+      .inventory-table td,
+      .crud-table th,
+      .crud-table td {
         border-bottom: 1px solid #d1d5db;
         padding: 0.7rem;
         text-align: left;
       }
 
-      .inventory-table td.actions {
+      .inventory-table td.actions,
+      .crud-table td.actions {
         display: flex;
         gap: 0.4rem;
       }
@@ -70,6 +99,37 @@
         color: #991b1b;
       }
 
+      .stack-form {
+        display: grid;
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 0.8rem;
+      }
+
+      .form-grid.two-col {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .checkbox-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.4rem;
+      }
+
+      .checkbox-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: #f3f4f6;
+        padding: 0.35rem 0.55rem;
+        border-radius: 999px;
+      }
+
       .modal-backdrop {
         position: fixed;
         inset: 0;
@@ -81,7 +141,7 @@
       }
 
       .modal {
-        width: min(560px, 100%);
+        width: min(680px, 100%);
         background: #ffffff;
         border-radius: 12px;
         padding: 1rem;
@@ -160,6 +220,10 @@
           width: 100%;
           min-width: 0;
         }
+
+        .form-grid.two-col {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -167,44 +231,175 @@
     <main class="wrapper">
       <header class="page-header">
         <h1>Panel del Inventarista</h1>
-        <p>
-          Gestion de productos: crear, actualizar stock, desactivar y reactivar.
-        </p>
+        <p>Gestión de productos, áreas y usuarios con asignación por áreas.</p>
       </header>
 
       <section class="panel">
-        <div class="toolbar">
-          <div class="toolbar-left">
-            <h2>Listado de Productos</h2>
-            <input
-              type="text"
-              id="filtroInventario"
-              placeholder="Buscar por SKU o nombre"
-              aria-label="Buscar por SKU o nombre"
-            />
+        <div class="tabs" role="tablist" aria-label="Secciones de inventario">
+          <button type="button" class="tab-btn active" data-tab="productos">
+            Productos
+          </button>
+          <button type="button" class="tab-btn" data-tab="areas">Áreas</button>
+          <button type="button" class="tab-btn" data-tab="usuarios">
+            Usuarios
+          </button>
+        </div>
+
+        <div id="tab-productos" class="tab-panel">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <h2>Listado de Productos</h2>
+              <input
+                type="text"
+                id="filtroInventario"
+                placeholder="Buscar por SKU o nombre"
+                aria-label="Buscar por SKU o nombre"
+              />
+            </div>
+            <div class="toolbar-actions">
+              <button type="button" id="btnNuevoProducto" class="btn-primary">
+                Nuevo producto
+              </button>
+              <button type="button" id="btnRecargarProductos">Recargar</button>
+            </div>
           </div>
-          <div class="toolbar-actions">
-            <button type="button" id="btnNuevoProducto" class="btn-primary">
-              Nuevo producto
-            </button>
-            <button type="button" id="btnRecargarProductos">Recargar</button>
+
+          <div class="table-wrapper">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>SKU</th>
+                  <th>Nombre</th>
+                  <th>Stock</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="inventarioBody"></tbody>
+            </table>
           </div>
         </div>
 
-        <div class="table-wrapper">
-          <table class="inventory-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>SKU</th>
-                <th>Nombre</th>
-                <th>Stock</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="inventarioBody"></tbody>
-          </table>
+        <div id="tab-areas" class="tab-panel hidden">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <h2>Gestión de Áreas</h2>
+            </div>
+          </div>
+
+          <form id="formArea" class="stack-form">
+            <input type="hidden" id="areaId" />
+            <div class="form-grid two-col">
+              <label>
+                Nombre del área
+                <input type="text" id="areaNombre" maxlength="120" required />
+              </label>
+              <label>
+                Código
+                <input type="text" id="areaCodigo" maxlength="20" required />
+              </label>
+            </div>
+            <label>
+              <input type="checkbox" id="areaActiva" checked /> Activa
+            </label>
+            <div class="modal-footer">
+              <button type="button" id="btnCancelarArea" class="btn-secondary">
+                Limpiar
+              </button>
+              <button type="submit" class="btn-primary">Guardar área</button>
+            </div>
+          </form>
+
+          <div class="table-wrapper">
+            <table class="crud-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Código</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="areasBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-usuarios" class="tab-panel hidden">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <h2>Gestión de Usuarios</h2>
+            </div>
+          </div>
+
+          <form id="formUsuario" class="stack-form">
+            <input type="hidden" id="usuarioId" />
+            <div class="form-grid two-col">
+              <label>
+                Usuario
+                <input
+                  type="text"
+                  id="usuarioUsername"
+                  maxlength="60"
+                  required
+                />
+              </label>
+              <label>
+                Nombre completo
+                <input
+                  type="text"
+                  id="usuarioNombre"
+                  maxlength="120"
+                  required
+                />
+              </label>
+              <label>
+                Correo
+                <input type="email" id="usuarioEmail" maxlength="120" />
+              </label>
+              <label>
+                Rol
+                <select id="usuarioRol" required>
+                  <option value="inventarista">Inventarista</option>
+                  <option value="director">Director</option>
+                  <option value="operario">Operario</option>
+                  <option value="paqueteria">Paquetería</option>
+                </select>
+              </label>
+              <label>
+                Área
+                <select id="usuarioArea"></select>
+              </label>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                id="btnCancelarUsuario"
+                class="btn-secondary"
+              >
+                Limpiar
+              </button>
+              <button type="submit" class="btn-primary">Guardar usuario</button>
+            </div>
+          </form>
+
+          <div class="table-wrapper">
+            <table class="crud-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Usuario</th>
+                  <th>Nombre</th>
+                  <th>Rol</th>
+                  <th>Área</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="usuariosBody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -243,6 +438,10 @@
                 step="1"
                 required
               />
+            </label>
+            <label>
+              Áreas asignadas
+              <div id="productoAreasCheckboxes" class="checkbox-list"></div>
             </label>
           </div>
           <div class="modal-footer">

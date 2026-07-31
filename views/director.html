@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Director - Pedidos para aprobación</title>
+    <link rel="stylesheet" href="assets/css/catalogo.css" />
+    <style>
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .pedidos-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .pedidos-table th,
+      .pedidos-table td {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 8px 6px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .actions-row {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .muted {
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrapper">
+      <header class="page-header">
+        <h1>Vista Director</h1>
+        <p>Aprueba y unifica pedidos de tu área</p>
+      </header>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Navegación</h2>
+          <a href="catalogo.html" class="btn-secondary">Ir a vista Catalogo</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Pedidos pendientes de aprobación</h2>
+          <button id="btnRecargar" type="button">Recargar</button>
+        </div>
+
+        <label>
+          ID Área
+          <input type="number" id="idArea" min="1" value="1" required />
+        </label>
+
+        <div class="actions-row">
+          <span id="seleccionResumen" class="muted">0 seleccionados</span>
+          <button id="btnAprobar" type="button" class="btn-primary">
+            Aprobar y Unificar Pedidos
+          </button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="pedidos-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selectAll" /></th>
+                <th>Pedido</th>
+                <th>Observaciones</th>
+                <th>Fecha</th>
+                <th>Items</th>
+              </tr>
+            </thead>
+            <tbody id="pedidosBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel status-panel">
+        <h2>Estado</h2>
+        <p id="mensajeEstado">Listo para operar.</p>
+      </section>
+    </main>
+
+    <script src="assets/js/api-config.js" defer></script>
+    <script src="assets/js/director.js" defer></script>
+  </body>
+</html>

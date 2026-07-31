@@ -12,15 +12,8 @@ DROP TRIGGER IF EXISTS trg_pedido_before_update;
 DROP TRIGGER IF EXISTS trg_detalle_pedido_before_insert;
 DROP TRIGGER IF EXISTS trg_detalle_pedido_before_update;
 
--- Elimina tablas en orden de dependencias
-DROP TABLE IF EXISTS detalle_pedidos;
-DROP TABLE IF EXISTS pedidos;
-DROP TABLE IF EXISTS productos;
-DROP TABLE IF EXISTS usuarios;
-DROP TABLE IF EXISTS oficinas;
-
 -- Tabla de oficinas/departamentos internos
-CREATE TABLE oficinas (
+CREATE TABLE IF NOT EXISTS oficinas (
   id_oficina INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(120) NOT NULL,
   codigo VARCHAR(20) NOT NULL,
@@ -32,34 +25,31 @@ CREATE TABLE oficinas (
 ) ENGINE=InnoDB;
 
 -- Tabla de usuarios (oficinas y administrador)
-CREATE TABLE usuarios (
+CREATE TABLE IF NOT EXISTS usuarios (
   id_usuario INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   id_oficina INT UNSIGNED NULL,
+  id_area INT UNSIGNED NULL,
   username VARCHAR(60) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   nombre_completo VARCHAR(120) NOT NULL,
   email VARCHAR(120) NULL,
-  rol ENUM('OFICINA','ADMIN_ALMACEN') NOT NULL DEFAULT 'OFICINA',
+  rol ENUM('inventarista','director','operario','paqueteria') NOT NULL DEFAULT 'operario',
   activo TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_usuarios_username (username),
   UNIQUE KEY uq_usuarios_email (email),
   KEY idx_usuarios_id_oficina (id_oficina),
+  KEY idx_usuarios_id_area (id_area),
   CONSTRAINT fk_usuarios_oficinas
     FOREIGN KEY (id_oficina)
     REFERENCES oficinas(id_oficina)
     ON UPDATE CASCADE
-    ON DELETE SET NULL,
-  CONSTRAINT ck_usuarios_oficina_rol
-    CHECK (
-      (rol = 'ADMIN_ALMACEN' AND id_oficina IS NULL)
-      OR (rol = 'OFICINA' AND id_oficina IS NOT NULL)
-    )
+    ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Catálogo de productos con stock disponible
-CREATE TABLE productos (
+CREATE TABLE IF NOT EXISTS productos (
   id_producto INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   sku VARCHAR(40) NOT NULL,
   nombre VARCHAR(150) NOT NULL,
@@ -74,13 +64,13 @@ CREATE TABLE productos (
   KEY idx_productos_nombre (nombre)
 ) ENGINE=InnoDB;
 
--- Pedidos: estado de flujo (pendiente -> entregado)
-CREATE TABLE pedidos (
+-- Pedidos: estado de flujo (aprobacion -> entrega)
+CREATE TABLE IF NOT EXISTS pedidos (
   id_pedido BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   id_usuario_solicitante INT UNSIGNED NOT NULL,
   id_oficina INT UNSIGNED NOT NULL,
   fecha_pedido DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  estado ENUM('PENDIENTE','ENTREGADO','CANCELADO') NOT NULL DEFAULT 'PENDIENTE',
+  estado ENUM('PENDIENTE_APROBACION','PENDIENTE','ENTREGADO','CANCELADO','FUSIONADO') NOT NULL DEFAULT 'PENDIENTE_APROBACION',
   observaciones VARCHAR(255) NULL,
   fecha_entrega DATETIME NULL,
   id_usuario_entrega INT UNSIGNED NULL,
@@ -107,7 +97,7 @@ CREATE TABLE pedidos (
 ) ENGINE=InnoDB;
 
 -- Detalle de productos por pedido
-CREATE TABLE detalle_pedidos (
+CREATE TABLE IF NOT EXISTS detalle_pedidos (
   id_detalle BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   id_pedido BIGINT UNSIGNED NOT NULL,
   id_producto INT UNSIGNED NOT NULL,
@@ -147,8 +137,8 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Pedido no existe.';
   END IF;
 
-  IF v_estado <> 'PENDIENTE' THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo se puede agregar detalle a pedidos pendientes.';
+  IF v_estado NOT IN ('PENDIENTE_APROBACION', 'PENDIENTE') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo se puede agregar detalle a pedidos pendientes o en aprobacion.';
   END IF;
 
   SELECT stock_actual INTO v_stock
@@ -176,8 +166,8 @@ BEGIN
   FROM pedidos
   WHERE id_pedido = NEW.id_pedido;
 
-  IF v_estado <> 'PENDIENTE' THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo se puede modificar detalle de pedidos pendientes.';
+  IF v_estado NOT IN ('PENDIENTE_APROBACION', 'PENDIENTE') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo se puede modificar detalle de pedidos pendientes o en aprobacion.';
   END IF;
 
   SELECT stock_actual INTO v_stock
@@ -242,25 +232,19 @@ SELECT id_oficina, nombre, codigo, activa, created_at, updated_at
 FROM oficinas
 WHERE NOT EXISTS (
   SELECT 1 FROM areas a WHERE a.id_area = oficinas.id_oficina
-);
+)
+ON DUPLICATE KEY UPDATE
+  nombre = VALUES(nombre),
+  codigo = VALUES(codigo),
+  activa = VALUES(activa);
 
 ALTER TABLE usuarios
-  ADD COLUMN id_area INT UNSIGNED NULL AFTER id_oficina;
+  ADD COLUMN IF NOT EXISTS id_area INT UNSIGNED NULL AFTER id_oficina;
 
 UPDATE usuarios u
-JOIN areas a ON a.id_area = u.id_oficina
+LEFT JOIN areas a ON a.id_area = u.id_oficina
 SET u.id_area = u.id_oficina
 WHERE u.id_area IS NULL AND u.id_oficina IS NOT NULL;
-
-ALTER TABLE usuarios
-  ADD CONSTRAINT fk_usuarios_area
-    FOREIGN KEY (id_area)
-    REFERENCES areas(id_area)
-    ON UPDATE CASCADE
-    ON DELETE SET NULL;
-
-ALTER TABLE usuarios
-  MODIFY COLUMN rol ENUM('inventarista','director','operario','paqueteria','OFICINA','ADMIN_ALMACEN') NOT NULL DEFAULT 'operario';
 
 UPDATE usuarios
 SET rol = CASE
@@ -295,19 +279,25 @@ SET estado = 'PENDIENTE_APROBACION'
 WHERE estado = 'CANCELADO';
 
 ALTER TABLE pedidos
-  MODIFY COLUMN estado ENUM('PENDIENTE_APROBACION','PENDIENTE','ENTREGADO') NOT NULL DEFAULT 'PENDIENTE_APROBACION';
+  MODIFY COLUMN estado ENUM('PENDIENTE_APROBACION','PENDIENTE','ENTREGADO','CANCELADO','FUSIONADO') NOT NULL DEFAULT 'PENDIENTE_APROBACION';
 
 -- Datos mínimos de ejemplo (opcional)
-INSERT INTO oficinas (nombre, codigo) VALUES
+INSERT IGNORE INTO oficinas (nombre, codigo) VALUES
 ('Oficina Administrativa', 'ADM'),
 ('Talento Humano', 'TH');
 
-INSERT INTO usuarios (id_oficina, username, password_hash, nombre_completo, email, rol)
+INSERT IGNORE INTO usuarios (id_oficina, username, password_hash, nombre_completo, email, rol)
 VALUES
-(NULL, 'admin_almacen', 'hash_seguro_admin', 'Administrador Almacen', 'admin@empresa.local', 'ADMIN_ALMACEN'),
-(1, 'oficina_adm', 'hash_seguro_oficina', 'Usuario Oficina ADM', 'adm@empresa.local', 'OFICINA');
+(NULL, 'admin_almacen', 'hash_seguro_admin', 'Administrador Almacen', 'admin@empresa.local', 'director'),
+(1, 'oficina_adm', 'hash_seguro_oficina', 'Usuario Oficina ADM', 'adm@empresa.local', 'operario');
 
-INSERT INTO productos (sku, nombre, descripcion, unidad_medida, stock_actual, stock_minimo)
+INSERT IGNORE INTO productos (sku, nombre, descripcion, unidad_medida, stock_actual, stock_minimo)
 VALUES
 ('PAP-001', 'Resma Carta', 'Papel tamano carta 75g', 'RESMA', 100, 20),
 ('PAP-002', 'Boligrafo Azul', 'Boligrafo tinta azul punta media', 'UND', 300, 50);
+
+INSERT IGNORE INTO producto_area (id_producto, id_area)
+VALUES
+(1, 1),
+(1, 2),
+(2, 1);

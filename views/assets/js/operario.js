@@ -19,7 +19,7 @@ const refs = {
   totalItems: document.getElementById("totalItems"),
   btnConfirmarPedido: document.getElementById("btnConfirmarPedido"),
   idUsuario: document.getElementById("idUsuario"),
-  idOficina: document.getElementById("idOficina"),
+  idArea: document.getElementById("idArea"),
   observaciones: document.getElementById("observaciones"),
   mensajeEstado: document.getElementById("mensajeEstado"),
 };
@@ -45,15 +45,15 @@ function limpiarFiltros() {
 }
 
 async function cargarCatalogo() {
-  setEstado("Cargando catalogo...");
+  const idUsuario = Number(refs.idUsuario.value || 0);
+  const idArea = Number(refs.idArea.value || 0);
+
+  setEstado("Cargando catalogo del área...");
 
   try {
-    const idUsuario = Number(refs.idUsuario.value || 0);
-    const idOficina = Number(refs.idOficina.value || 0);
     const url = new URL(API_CATALOGO, window.location.href);
-
     if (idUsuario > 0) url.searchParams.set("id_usuario", String(idUsuario));
-    if (idOficina > 0) url.searchParams.set("id_area", String(idOficina));
+    if (idArea > 0) url.searchParams.set("id_area", String(idArea));
 
     const res = await fetch(url, {
       method: "GET",
@@ -65,15 +65,15 @@ async function cargarCatalogo() {
     const data = await res.json();
 
     if (!res.ok || !data.ok) {
-      throw new Error(data.mensaje || "No fue posible cargar catalogo.");
+      throw new Error(data.mensaje || "No fue posible cargar el catalogo.");
     }
 
     state.productos = Array.isArray(data.data) ? data.data : [];
     renderCatalogo();
-    setEstado("Catalogo cargado correctamente.");
+    setEstado("Catalogo cargado correctamente para el área seleccionada.");
   } catch (error) {
     console.error(error);
-    setEstado("Error al cargar catalogo: " + error.message, true);
+    setEstado("Error al cargar el catalogo: " + error.message, true);
   }
 }
 
@@ -82,7 +82,7 @@ function renderCatalogo() {
   refs.grid.innerHTML = "";
 
   if (state.productos.length === 0) {
-    refs.grid.innerHTML = "<p>No hay productos disponibles.</p>";
+    refs.grid.innerHTML = "<p>No hay productos disponibles para esta área.</p>";
     return;
   }
 
@@ -105,14 +105,7 @@ function renderCatalogo() {
       <div class="meta">Stock: ${stock}</div>
       <div class="meta">Unidad: ${escapeHtml(producto.unidad_medida || "UND")}</div>
       <div class="card-actions">
-        <input
-          class="qty-input"
-          type="number"
-          min="1"
-          max="${maxQty}"
-          value="1"
-          ${stock <= 0 ? "disabled" : ""}
-        >
+        <input class="qty-input" type="number" min="1" max="${maxQty}" value="1" ${stock <= 0 ? "disabled" : ""}>
         <button type="button" ${stock <= 0 ? "disabled" : ""}>Agregar al carrito</button>
       </div>
     `;
@@ -221,15 +214,15 @@ function renderCarrito() {
 
 async function confirmarPedido() {
   const idUsuario = Number(refs.idUsuario.value || 0);
-  const idOficina = Number(refs.idOficina.value || 0);
+  const idArea = Number(refs.idArea.value || 0);
   const observaciones = refs.observaciones.value.trim();
   const items = Array.from(state.carrito.values()).map((item) => ({
     id_producto: item.id_producto,
     cantidad: item.cantidad,
   }));
 
-  if (idUsuario <= 0 || idOficina <= 0) {
-    setEstado("Debes ingresar ID de usuario y oficina validos.", true);
+  if (idUsuario <= 0 || idArea <= 0) {
+    setEstado("Debes ingresar ID de usuario y área validos.", true);
     return;
   }
 
@@ -238,7 +231,7 @@ async function confirmarPedido() {
     return;
   }
 
-  setEstado("Enviando pedido...");
+  setEstado("Enviando pedido a aprobación...");
 
   try {
     const res = await fetch(API_GUARDAR_PEDIDO, {
@@ -249,7 +242,7 @@ async function confirmarPedido() {
       },
       body: JSON.stringify({
         id_usuario: idUsuario,
-        id_oficina: idOficina,
+        id_oficina: idArea,
         observaciones,
         items,
       }),
@@ -263,7 +256,9 @@ async function confirmarPedido() {
 
     state.carrito.clear();
     renderCarrito();
-    setEstado("Pedido creado. ID: " + data.data.id_pedido);
+    setEstado(
+      "Pedido creado y enviado a aprobación. ID: " + data.data.id_pedido,
+    );
   } catch (error) {
     console.error(error);
     setEstado("Error al guardar pedido: " + error.message, true);

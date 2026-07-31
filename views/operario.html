@@ -3,23 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Catalogo de Papeleria</title>
+    <title>Operario - Solicitud de papeleria</title>
     <link rel="stylesheet" href="assets/css/catalogo.css" />
   </head>
   <body>
     <main class="wrapper">
       <header class="page-header">
-        <h1>Catalogo de Productos</h1>
-        <p>Oficinas internas - Solicitud de papeleria</p>
+        <h1>Vista Operario</h1>
+        <p>Catálogo filtrado por tu área y pedido en espera de aprobación</p>
       </header>
 
       <section class="panel">
         <div class="section-title">
           <h2>Navegacion</h2>
-          <a href="directivos.html" class="btn-secondary"
-            >Ir a vista Directivos</a
-          >
-          <a href="operario.html" class="btn-secondary">Ir a vista Operario</a>
+          <a href="catalogo.html" class="btn-secondary">Ir a vista Catalogo</a>
         </div>
       </section>
 
@@ -31,33 +28,25 @@
             <input type="number" id="idUsuario" min="1" value="2" required />
           </label>
           <label>
-            ID Oficina
-            <input type="number" id="idOficina" min="1" value="1" required />
+            ID Área
+            <input type="number" id="idArea" min="1" value="1" required />
           </label>
         </div>
         <label class="obs-field">
           Observaciones
-          <textarea
-            id="observaciones"
-            rows="2"
-            placeholder="Opcional"
-          ></textarea>
+          <textarea id="observaciones" rows="2" placeholder="Opcional"></textarea>
         </label>
       </section>
 
       <section class="panel">
         <div class="section-title">
-          <h2>Productos disponibles</h2>
+          <h2>Productos disponibles para tu área</h2>
           <button id="btnRecargar" type="button">Recargar</button>
         </div>
         <div class="filters-bar">
           <label>
             Buscar (nombre o SKU)
-            <input
-              type="text"
-              id="filtroBusqueda"
-              placeholder="Ej: resma, PAP-001"
-            />
+            <input type="text" id="filtroBusqueda" placeholder="Ej: resma, PAP-001" />
           </label>
           <label class="stock-filter">
             <input type="checkbox" id="filtroConStock" />
@@ -91,7 +80,7 @@
           <div class="cart-footer">
             <strong>Total items: <span id="totalItems">0</span></strong>
             <button id="btnConfirmarPedido" type="button" class="btn-primary">
-              Confirmar pedido
+              Enviar a aprobación
             </button>
           </div>
         </div>
@@ -104,6 +93,6 @@
     </main>
 
     <script src="assets/js/api-config.js" defer></script>
-    <script src="assets/js/catalogo.js" defer></script>
+    <script src="assets/js/operario.js" defer></script>
   </body>
 </html>
