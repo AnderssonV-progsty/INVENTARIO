@@ -6,9 +6,10 @@
     <title>Operario - Solicitud de papeleria</title>
     <link rel="stylesheet" href="assets/css/catalogo.css" />
   </head>
-  <body>
+  <body class="view-operario">
     <main class="wrapper">
       <header class="page-header">
+        <span class="page-role-tag">Vista Operario</span>
         <h1>Vista Operario</h1>
         <p>Catálogo filtrado por tu área y pedido en espera de aprobación</p>
       </header>
@@ -34,7 +35,11 @@
         </div>
         <label class="obs-field">
           Observaciones
-          <textarea id="observaciones" rows="2" placeholder="Opcional"></textarea>
+          <textarea
+            id="observaciones"
+            rows="2"
+            placeholder="Opcional"
+          ></textarea>
         </label>
       </section>
 
@@ -46,7 +51,11 @@
         <div class="filters-bar">
           <label>
             Buscar (nombre o SKU)
-            <input type="text" id="filtroBusqueda" placeholder="Ej: resma, PAP-001" />
+            <input
+              type="text"
+              id="filtroBusqueda"
+              placeholder="Ej: resma, PAP-001"
+            />
           </label>
           <label class="stock-filter">
             <input type="checkbox" id="filtroConStock" />
@@ -84,6 +93,26 @@
             </button>
           </div>
         </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Historial de solicitudes</h2>
+          <button id="btnRecargarHistorial" type="button" class="btn-secondary">
+            Recargar historial
+          </button>
+        </div>
+        <table class="cart-table">
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th>Items</th>
+            </tr>
+          </thead>
+          <tbody id="historialBody"></tbody>
+        </table>
       </section>
 
       <section class="panel status-panel">

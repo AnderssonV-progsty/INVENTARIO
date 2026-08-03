@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../models/PedidoModel.php';
+require_once __DIR__ . '/AuthSession.php';
 
 final class PedidoController
 {
@@ -204,6 +205,33 @@ final class PedidoController
       $this->responderJson(500, [
         'ok' => false,
         'mensaje' => 'Error interno del servidor.',
+      ]);
+    }
+  }
+
+  public function historialDesdeSesion(): void
+  {
+    try {
+      $usuarioSesion = AuthSession::requireRoles(['director', 'operario']);
+      $idUsuario = (int) ($usuarioSesion['id_usuario'] ?? 0);
+      $idOficina = (int) (($usuarioSesion['id_area'] ?? $usuarioSesion['id_oficina']) ?? 0);
+
+      $historial = $this->pedidoModel->obtenerHistorialSolicitante(
+        $idUsuario,
+        $idOficina > 0 ? $idOficina : null
+      );
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Historial de pedidos obtenido correctamente.',
+        'data' => $historial,
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error al consultar historial de pedidos: ' . $e->getMessage());
+
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible consultar el historial de pedidos.',
       ]);
     }
   }

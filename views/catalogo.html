@@ -104,6 +104,53 @@
     </main>
 
     <script src="assets/js/api-config.js" defer></script>
+    <script>
+      (function () {
+        const API_BASE = (window.API_BASE || "../api").replace(/\/+$/, "");
+        const API_LOGIN = `${API_BASE}/login.php`;
+
+        function rutaPorRol(rol) {
+          const rolNormalizado = String(rol || "")
+            .trim()
+            .toLowerCase();
+          const mapa = {
+            inventarista: "inventarista.html",
+            director: "directivos.html",
+            directivo: "directivos.html",
+            operario: "operario.html",
+            paqueteria: "paqueteria.html",
+          };
+
+          return mapa[rolNormalizado] || "login.html";
+        }
+
+        fetch(API_LOGIN, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        })
+          .then((response) =>
+            response
+              .json()
+              .catch(() => ({}))
+              .then((data) => ({ response, data })),
+          )
+          .then(({ response, data }) => {
+            if (!response.ok || !data.ok) {
+              window.location.replace("login.html");
+              return;
+            }
+
+            const rol = String(data.data?.usuario?.rol || "");
+            const destino = rutaPorRol(rol);
+            if (destino !== "catalogo.html") {
+              window.location.replace(destino);
+            }
+          })
+          .catch(() => {
+            window.location.replace("login.html");
+          });
+      })();
+    </script>
     <script src="assets/js/catalogo.js" defer></script>
   </body>
 </html>

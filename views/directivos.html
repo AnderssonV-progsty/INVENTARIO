@@ -6,9 +6,10 @@
     <title>Directivos - Solicitud de Papeleria</title>
     <link rel="stylesheet" href="assets/css/catalogo.css" />
   </head>
-  <body>
+  <body class="view-directivos">
     <main class="wrapper">
       <header class="page-header">
+        <span class="page-role-tag">Vista Directivos</span>
         <h1>Portal de Directivos</h1>
         <p>Realiza solicitudes de papeleria para tu area</p>
       </header>
@@ -80,6 +81,26 @@
             </button>
           </div>
         </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Historial de solicitudes</h2>
+          <button id="btnRecargarHistorial" type="button" class="btn-secondary">
+            Recargar historial
+          </button>
+        </div>
+        <table class="cart-table">
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th>Items</th>
+            </tr>
+          </thead>
+          <tbody id="historialBody"></tbody>
+        </table>
       </section>
 
       <section class="panel status-panel">

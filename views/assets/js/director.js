@@ -1,6 +1,7 @@
 const API_BASE = (window.API_BASE || "../api").replace(/\/+$/, "");
 const API_PEDIDOS = `${API_BASE}/pedidos_pendientes.php`;
 const API_APROBAR_UNIFICAR = `${API_BASE}/aprobar_unificar.php`;
+const API_LOGIN = `${API_BASE}/login.php`;
 
 const state = {
   pedidos: [],
@@ -17,8 +18,10 @@ const refs = {
   seleccionResumen: document.getElementById("seleccionResumen"),
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
+  const autenticado = await inicializarSesion();
+  if (!autenticado) return;
   cargarPedidos();
 });
 
@@ -27,6 +30,48 @@ function bindEvents() {
   refs.btnAprobar.addEventListener("click", aprobarYUnificar);
   refs.selectAll.addEventListener("change", toggleSeleccionTodos);
   refs.idArea.addEventListener("change", cargarPedidos);
+}
+
+async function inicializarSesion() {
+  try {
+    const data = await requestJson(API_LOGIN, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    const usuario = data.data?.usuario || {};
+    const rol = String(usuario.rol || "")
+      .trim()
+      .toLowerCase();
+    if (!["director", "directivo"].includes(rol)) {
+      window.location.href = rutaPorRol(rol);
+      return false;
+    }
+
+    refs.idArea.value = String(
+      Number(usuario.id_area || usuario.id_oficina || 0),
+    );
+    refs.idArea.readOnly = true;
+    return true;
+  } catch (error) {
+    window.location.href = "login.html";
+    return false;
+  }
+}
+
+function rutaPorRol(rol) {
+  const rolNormalizado = String(rol || "")
+    .trim()
+    .toLowerCase();
+  const mapa = {
+    inventarista: "inventarista.html",
+    director: "directivos.html",
+    directivo: "directivos.html",
+    operario: "operario.html",
+    paqueteria: "paqueteria.html",
+  };
+
+  return mapa[rolNormalizado] || "login.html";
 }
 
 async function cargarPedidos() {
@@ -176,6 +221,24 @@ async function aprobarYUnificar() {
       "No fue posible aprobar y unificar los pedidos: " + error.message,
     );
   }
+}
+
+async function requestJson(url, options) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (error) {
+    throw new Error("La API devolvio una respuesta no valida en JSON.");
+  }
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.mensaje || "Error en la operacion con la API.");
+  }
+
+  return data;
 }
 
 function setEstado(mensaje, isError = false) {

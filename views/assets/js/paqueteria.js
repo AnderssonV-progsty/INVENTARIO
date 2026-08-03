@@ -1,6 +1,7 @@
 const API_BASE = (window.API_BASE || "../api").replace(/\/+$/, "");
 const API_PEDIDOS_PENDIENTES = `${API_BASE}/pedidos_pendientes.php`;
 const API_ENTREGAR_PEDIDO = `${API_BASE}/entregar_pedido.php`;
+const API_LOGIN = `${API_BASE}/login.php`;
 
 const state = {
   pedidos: [],
@@ -12,13 +13,52 @@ const refs = {
   mensajeEstado: document.getElementById("mensajeEstado"),
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
+  const autenticado = await inicializarSesion();
+  if (!autenticado) return;
   cargarPedidosPendientes();
 });
 
 function bindEvents() {
   refs.btnRecargar.addEventListener("click", cargarPedidosPendientes);
+}
+
+async function inicializarSesion() {
+  try {
+    const data = await requestJson(API_LOGIN, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    const rol = String(data.data?.usuario?.rol || "")
+      .trim()
+      .toLowerCase();
+    if (rol !== "paqueteria") {
+      window.location.href = rutaPorRol(rol);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    window.location.href = "login.html";
+    return false;
+  }
+}
+
+function rutaPorRol(rol) {
+  const rolNormalizado = String(rol || "")
+    .trim()
+    .toLowerCase();
+  const mapa = {
+    inventarista: "inventarista.html",
+    director: "directivos.html",
+    directivo: "directivos.html",
+    operario: "operario.html",
+    paqueteria: "paqueteria.html",
+  };
+
+  return mapa[rolNormalizado] || "login.html";
 }
 
 async function cargarPedidosPendientes() {

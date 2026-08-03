@@ -5,8 +5,17 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, sans-serif;
-  background: #f5f7fb;
+  background: radial-gradient(
+    circle at top right,
+    #e2e8f0 0%,
+    #f5f7fb 45%,
+    #eff6ff 100%
+  );
   color: #1f2937;
+  --accent: #1d4ed8;
+  --accent-strong: #1e40af;
+  --panel-border: #dbeafe;
+  --header-bg: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
 }
 
 .wrapper {
@@ -18,7 +27,9 @@ body {
 
 .page-header h1 {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: clamp(2rem, 3.6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: 0.02em;
 }
 
 .page-header p {
@@ -26,9 +37,30 @@ body {
   color: #4b5563;
 }
 
+.page-header {
+  background: var(--header-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.page-role-tag {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, white);
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .panel {
   background: #ffffff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--panel-border);
   border-radius: 10px;
   padding: 14px;
 }
@@ -148,13 +180,13 @@ button:hover {
 }
 
 .btn-primary {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
 .btn-primary:hover {
-  background: #1e40af;
+  background: var(--accent-strong);
 }
 
 .cart-table {
@@ -187,6 +219,48 @@ button:hover {
 
 .status-panel p {
   margin: 8px 0 0;
+}
+
+body.view-catalogo {
+  --accent: #1d4ed8;
+  --accent-strong: #1e3a8a;
+  --panel-border: #bfdbfe;
+  --header-bg: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+}
+
+body.view-directivos {
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --panel-border: #99f6e4;
+  --header-bg: linear-gradient(135deg, #ccfbf1 0%, #f0fdfa 100%);
+}
+
+body.view-director {
+  --accent: #7c3aed;
+  --accent-strong: #5b21b6;
+  --panel-border: #ddd6fe;
+  --header-bg: linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%);
+}
+
+body.view-operario {
+  --accent: #b45309;
+  --accent-strong: #92400e;
+  --panel-border: #fde68a;
+  --header-bg: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+}
+
+body.view-paqueteria {
+  --accent: #be123c;
+  --accent-strong: #9f1239;
+  --panel-border: #fda4af;
+  --header-bg: linear-gradient(135deg, #ffe4e6 0%, #fff1f2 100%);
+}
+
+body.view-inventarista {
+  --accent: #047857;
+  --accent-strong: #065f46;
+  --panel-border: #a7f3d0;
+  --header-bg: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
 }
 
 @media (max-width: 640px) {

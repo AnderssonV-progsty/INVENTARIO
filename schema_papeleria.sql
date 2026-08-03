@@ -7,6 +7,22 @@ CREATE DATABASE IF NOT EXISTS almacen_papeleria
 
 USE almacen_papeleria;
 
+-- Limpieza para re-ejecuciones sobre bases ya creadas
+SET @old_check = (
+  SELECT CONSTRAINT_NAME
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'usuarios'
+    AND CONSTRAINT_TYPE = 'CHECK'
+    AND CONSTRAINT_NAME = 'ck_usuarios_oficina_rol'
+  LIMIT 1
+);
+
+SET @sql = IF(@old_check IS NOT NULL, CONCAT('ALTER TABLE usuarios DROP CONSTRAINT ', @old_check), 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- Elimina triggers primero si ya existían (para re-ejecutar script sin errores)
 DROP TRIGGER IF EXISTS trg_pedido_before_update;
 DROP TRIGGER IF EXISTS trg_detalle_pedido_before_insert;
@@ -22,6 +38,18 @@ CREATE TABLE IF NOT EXISTS oficinas (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_oficinas_nombre (nombre),
   UNIQUE KEY uq_oficinas_codigo (codigo)
+) ENGINE=InnoDB;
+
+-- Catálogo de áreas del negocio
+CREATE TABLE IF NOT EXISTS areas (
+  id_area INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(120) NOT NULL,
+  codigo VARCHAR(20) NOT NULL,
+  activa TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_areas_nombre (nombre),
+  UNIQUE KEY uq_areas_codigo (codigo)
 ) ENGINE=InnoDB;
 
 -- Tabla de usuarios (oficinas y administrador)
@@ -44,6 +72,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
   CONSTRAINT fk_usuarios_oficinas
     FOREIGN KEY (id_oficina)
     REFERENCES oficinas(id_oficina)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+  CONSTRAINT fk_usuarios_area
+    FOREIGN KEY (id_area)
+    REFERENCES areas(id_area)
     ON UPDATE CASCADE
     ON DELETE SET NULL
 ) ENGINE=InnoDB;
@@ -186,8 +219,19 @@ FOR EACH ROW
 BEGIN
   DECLARE v_faltantes INT DEFAULT 0;
 
-  IF OLD.estado = 'ENTREGADO' AND NEW.estado <> 'ENTREGADO' THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No se permite revertir pedidos entregados.';
+  IF OLD.estado = NEW.estado THEN
+    -- Permite updates de campos auxiliares sin cambio de estado
+    SET NEW.fecha_entrega = NEW.fecha_entrega;
+  ELSE
+    IF OLD.estado = 'PENDIENTE_APROBACION' AND NEW.estado NOT IN ('PENDIENTE', 'FUSIONADO', 'CANCELADO') THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transicion invalida desde PENDIENTE_APROBACION.';
+    ELSEIF OLD.estado = 'PENDIENTE' AND NEW.estado NOT IN ('ENTREGADO', 'CANCELADO') THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transicion invalida desde PENDIENTE.';
+    ELSEIF OLD.estado = 'ENTREGADO' AND NEW.estado <> 'ENTREGADO' THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No se permite revertir pedidos entregados.';
+    ELSEIF OLD.estado = 'FUSIONADO' AND NEW.estado <> 'FUSIONADO' THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No se permite cambiar pedidos fusionados.';
+    END IF;
   END IF;
 
   IF OLD.estado <> 'ENTREGADO' AND NEW.estado = 'ENTREGADO' THEN
@@ -216,17 +260,6 @@ DELIMITER ;
 
 -- Migración segura para soportar áreas, roles y nuevos estados de pedido
 -- (No borra datos; solo agrega compatibilidad)
-CREATE TABLE IF NOT EXISTS areas (
-  id_area INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  nombre VARCHAR(120) NOT NULL,
-  codigo VARCHAR(20) NOT NULL,
-  activa TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_areas_nombre (nombre),
-  UNIQUE KEY uq_areas_codigo (codigo)
-) ENGINE=InnoDB;
-
 INSERT INTO areas (id_area, nombre, codigo, activa, created_at, updated_at)
 SELECT id_oficina, nombre, codigo, activa, created_at, updated_at
 FROM oficinas
@@ -238,13 +271,23 @@ ON DUPLICATE KEY UPDATE
   codigo = VALUES(codigo),
   activa = VALUES(activa);
 
-ALTER TABLE usuarios
-  ADD COLUMN IF NOT EXISTS id_area INT UNSIGNED NULL AFTER id_oficina;
+SET @has_id_area = (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'usuarios'
+    AND COLUMN_NAME = 'id_area'
+);
+
+SET @sql_area = IF(@has_id_area = 0, 'ALTER TABLE usuarios ADD COLUMN id_area INT UNSIGNED NULL AFTER id_oficina', 'SELECT 1');
+PREPARE stmt_area FROM @sql_area;
+EXECUTE stmt_area;
+DEALLOCATE PREPARE stmt_area;
 
 UPDATE usuarios u
 LEFT JOIN areas a ON a.id_area = u.id_oficina
 SET u.id_area = u.id_oficina
-WHERE u.id_area IS NULL AND u.id_oficina IS NOT NULL;
+WHERE u.id_area IS NULL AND u.id_oficina IS NOT NULL AND u.id_oficina IN (SELECT id_oficina FROM oficinas);
 
 UPDATE usuarios
 SET rol = CASE
@@ -288,8 +331,8 @@ INSERT IGNORE INTO oficinas (nombre, codigo) VALUES
 
 INSERT IGNORE INTO usuarios (id_oficina, username, password_hash, nombre_completo, email, rol)
 VALUES
-(NULL, 'admin_almacen', 'hash_seguro_admin', 'Administrador Almacen', 'admin@empresa.local', 'director'),
-(1, 'oficina_adm', 'hash_seguro_oficina', 'Usuario Oficina ADM', 'adm@empresa.local', 'operario');
+(NULL, 'admin_almacen', '123456', 'Administrador Almacen', 'admin@empresa.local', 'director'),
+(1, 'oficina_adm', '123456', 'Usuario Oficina ADM', 'adm@empresa.local', 'operario');
 
 INSERT IGNORE INTO productos (sku, nombre, descripcion, unidad_medida, stock_actual, stock_minimo)
 VALUES
@@ -297,7 +340,13 @@ VALUES
 ('PAP-002', 'Boligrafo Azul', 'Boligrafo tinta azul punta media', 'UND', 300, 50);
 
 INSERT IGNORE INTO producto_area (id_producto, id_area)
-VALUES
-(1, 1),
-(1, 2),
-(2, 1);
+SELECT p.id_producto, a.id_area
+FROM productos p
+JOIN areas a ON a.id_area IN (1,2)
+WHERE p.id_producto = 1
+  AND a.id_area IN (1,2)
+UNION ALL
+SELECT p.id_producto, a.id_area
+FROM productos p
+JOIN areas a ON a.id_area = 1
+WHERE p.id_producto = 2;

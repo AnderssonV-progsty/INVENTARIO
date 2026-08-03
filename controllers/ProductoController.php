@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../models/ProductoModel.php';
+require_once __DIR__ . '/AuthSession.php';
 
 final class ProductoController
 {
@@ -589,6 +590,31 @@ final class ProductoController
       $this->responderJson(500, [
         'ok' => false,
         'mensaje' => 'No fue posible eliminar el usuario.',
+      ]);
+    }
+  }
+
+  public function reportesInventario(): void
+  {
+    try {
+      AuthSession::requireRoles(['inventarista']);
+
+      $bajoStock = $this->productoModel->obtenerProductosBajoStock(5);
+      $topPedidos = $this->productoModel->obtenerTopProductosMasPedidos(5);
+
+      $this->responderJson(200, [
+        'ok' => true,
+        'mensaje' => 'Reportes generados correctamente.',
+        'data' => [
+          'productos_bajo_stock' => $bajoStock,
+          'top_5_productos_mas_pedidos' => $topPedidos,
+        ],
+      ]);
+    } catch (Throwable $e) {
+      error_log('Error reportes inventario: ' . $e->getMessage());
+      $this->responderJson(500, [
+        'ok' => false,
+        'mensaje' => 'No fue posible generar los reportes.',
       ]);
     }
   }

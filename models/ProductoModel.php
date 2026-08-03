@@ -453,4 +453,48 @@ final class ProductoModel
       ]);
     }
   }
+
+  public function obtenerProductosBajoStock(int $umbral = 5): array
+  {
+    $sql = "
+      SELECT
+        id_producto,
+        sku,
+        nombre,
+        stock_actual,
+        stock_minimo
+      FROM productos
+      WHERE activo = 1
+        AND stock_actual < :umbral
+      ORDER BY stock_actual ASC, nombre ASC
+    ";
+
+    $stmt = $this->pdo->prepare($sql);
+    $stmt->execute([':umbral' => $umbral]);
+    return $stmt->fetchAll();
+  }
+
+  public function obtenerTopProductosMasPedidos(int $limite = 5): array
+  {
+    $limite = max(1, $limite);
+    $sql = "
+      SELECT
+        d.id_producto,
+        p.sku,
+        p.nombre,
+        SUM(d.cantidad) AS total_unidades,
+        COUNT(DISTINCT pd.id_pedido) AS total_pedidos,
+        COUNT(DISTINCT pd.id_oficina) AS total_areas
+      FROM detalle_pedidos d
+      INNER JOIN pedidos pd ON pd.id_pedido = d.id_pedido
+      INNER JOIN productos p ON p.id_producto = d.id_producto
+      WHERE pd.estado <> 'FUSIONADO'
+      GROUP BY d.id_producto, p.sku, p.nombre
+      ORDER BY total_unidades DESC, total_pedidos DESC, p.nombre ASC
+      LIMIT $limite
+    ";
+
+    $stmt = $this->pdo->query($sql);
+    return $stmt->fetchAll();
+  }
 }

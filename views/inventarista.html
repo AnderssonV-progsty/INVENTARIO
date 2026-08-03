@@ -227,9 +227,10 @@
       }
     </style>
   </head>
-  <body>
+  <body class="view-inventarista">
     <main class="wrapper">
       <header class="page-header">
+        <span class="page-role-tag">Vista Inventarista</span>
         <h1>Panel del Inventarista</h1>
         <p>Gestión de productos, áreas y usuarios con asignación por áreas.</p>
       </header>
@@ -242,6 +243,9 @@
           <button type="button" class="tab-btn" data-tab="areas">Áreas</button>
           <button type="button" class="tab-btn" data-tab="usuarios">
             Usuarios
+          </button>
+          <button type="button" class="tab-btn" data-tab="reportes">
+            Reportes
           </button>
         </div>
 
@@ -398,6 +402,48 @@
                 </tr>
               </thead>
               <tbody id="usuariosBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tab-reportes" class="tab-panel hidden">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <h2>Reportes Básicos</h2>
+            </div>
+            <div class="toolbar-actions">
+              <button type="button" id="btnRecargarReportes">Recargar</button>
+            </div>
+          </div>
+
+          <h3>Productos con bajo stock (menor a 5)</h3>
+          <div class="table-wrapper">
+            <table class="crud-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>SKU</th>
+                  <th>Nombre</th>
+                  <th>Stock Actual</th>
+                </tr>
+              </thead>
+              <tbody id="reporteBajoStockBody"></tbody>
+            </table>
+          </div>
+
+          <h3>Top 5 productos más pedidos por las áreas</h3>
+          <div class="table-wrapper">
+            <table class="crud-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Nombre</th>
+                  <th>Total Unidades</th>
+                  <th>Total Pedidos</th>
+                  <th>Áreas</th>
+                </tr>
+              </thead>
+              <tbody id="reporteTopPedidosBody"></tbody>
             </table>
           </div>
         </div>

@@ -1,5 +1,7 @@
 const API_BASE = (window.API_BASE || "../api").replace(/\/+$/, "");
 const API_PRODUCTOS = `${API_BASE}/productos_crud.php`;
+const API_LOGIN = `${API_BASE}/login.php`;
+const API_REPORTES = `${API_BASE}/reportes.php`;
 
 const state = {
   productos: [],
@@ -40,15 +42,21 @@ const refs = {
   usuarioArea: document.getElementById("usuarioArea"),
   usuariosBody: document.getElementById("usuariosBody"),
   btnCancelarUsuario: document.getElementById("btnCancelarUsuario"),
+  btnRecargarReportes: document.getElementById("btnRecargarReportes"),
+  reporteBajoStockBody: document.getElementById("reporteBajoStockBody"),
+  reporteTopPedidosBody: document.getElementById("reporteTopPedidosBody"),
   tabButtons: Array.from(document.querySelectorAll(".tab-btn")),
   tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
+  const autenticado = await inicializarSesion();
+  if (!autenticado) return;
   cargarAreas();
   cargarProductos();
   cargarUsuarios();
+  cargarReportes();
 });
 
 function bindEvents() {
@@ -80,10 +88,48 @@ function bindEvents() {
   });
 
   refs.btnCancelarUsuario.addEventListener("click", resetearFormularioUsuario);
+  refs.btnRecargarReportes.addEventListener("click", cargarReportes);
 
   refs.tabButtons.forEach((button) => {
     button.addEventListener("click", () => mostrarTab(button.dataset.tab));
   });
+}
+
+async function inicializarSesion() {
+  try {
+    const data = await requestJson(API_LOGIN, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    const rol = String(data.data?.usuario?.rol || "")
+      .trim()
+      .toLowerCase();
+    if (rol !== "inventarista") {
+      window.location.href = rutaPorRol(rol);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    window.location.href = "login.html";
+    return false;
+  }
+}
+
+function rutaPorRol(rol) {
+  const rolNormalizado = String(rol || "")
+    .trim()
+    .toLowerCase();
+  const mapa = {
+    inventarista: "inventarista.html",
+    director: "directivos.html",
+    directivo: "directivos.html",
+    operario: "operario.html",
+    paqueteria: "paqueteria.html",
+  };
+
+  return mapa[rolNormalizado] || "login.html";
 }
 
 function mostrarTab(nombreTab) {
@@ -680,6 +726,72 @@ async function reactivarProducto(idProducto) {
   } catch (error) {
     console.error(error);
     setEstado("Error al reactivar producto: " + error.message, true, true);
+  }
+}
+
+async function cargarReportes() {
+  try {
+    const data = await requestJson(API_REPORTES, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    const bajoStock = Array.isArray(data.data?.productos_bajo_stock)
+      ? data.data.productos_bajo_stock
+      : [];
+    const topPedidos = Array.isArray(data.data?.top_5_productos_mas_pedidos)
+      ? data.data.top_5_productos_mas_pedidos
+      : [];
+
+    renderReporteBajoStock(bajoStock);
+    renderReporteTopPedidos(topPedidos);
+  } catch (error) {
+    renderReporteBajoStock([]);
+    renderReporteTopPedidos([]);
+    setEstado("Error al cargar reportes: " + error.message, true, true);
+  }
+}
+
+function renderReporteBajoStock(rows) {
+  refs.reporteBajoStockBody.innerHTML = "";
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    refs.reporteBajoStockBody.innerHTML =
+      '<tr><td colspan="4">No hay productos bajo stock.</td></tr>';
+    return;
+  }
+
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${Number(row.id_producto || 0)}</td>
+      <td>${escapeHtml(row.sku || "-")}</td>
+      <td>${escapeHtml(row.nombre || "-")}</td>
+      <td>${Number(row.stock_actual || 0)}</td>
+    `;
+    refs.reporteBajoStockBody.appendChild(tr);
+  }
+}
+
+function renderReporteTopPedidos(rows) {
+  refs.reporteTopPedidosBody.innerHTML = "";
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    refs.reporteTopPedidosBody.innerHTML =
+      '<tr><td colspan="5">Aún no hay datos de pedidos.</td></tr>';
+    return;
+  }
+
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(row.sku || "-")}</td>
+      <td>${escapeHtml(row.nombre || "-")}</td>
+      <td>${Number(row.total_unidades || 0)}</td>
+      <td>${Number(row.total_pedidos || 0)}</td>
+      <td>${Number(row.total_areas || 0)}</td>
+    `;
+    refs.reporteTopPedidosBody.appendChild(tr);
   }
 }
 

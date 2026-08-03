@@ -257,4 +257,68 @@ final class PedidoModel
 
     return (bool) $stmt->fetchColumn();
   }
+
+  public function obtenerHistorialSolicitante(int $idUsuario, ?int $idOficina = null): array
+  {
+    $sql = "
+      SELECT
+        p.id_pedido,
+        p.id_oficina,
+        p.estado,
+        p.observaciones,
+        p.fecha_pedido,
+        p.fecha_entrega,
+        o.nombre AS nombre_oficina,
+        d.id_producto,
+        pr.sku,
+        pr.nombre AS nombre_producto,
+        d.cantidad
+      FROM pedidos p
+      INNER JOIN oficinas o ON o.id_oficina = p.id_oficina
+      INNER JOIN detalle_pedidos d ON d.id_pedido = p.id_pedido
+      INNER JOIN productos pr ON pr.id_producto = d.id_producto
+      WHERE p.id_usuario_solicitante = :id_usuario
+    ";
+
+    $params = [':id_usuario' => $idUsuario];
+
+    if ($idOficina !== null && $idOficina > 0) {
+      $sql .= ' AND p.id_oficina = :id_oficina';
+      $params[':id_oficina'] = $idOficina;
+    }
+
+    $sql .= ' ORDER BY p.fecha_pedido DESC, p.id_pedido DESC, d.id_detalle ASC';
+
+    $stmt = $this->pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+
+    $pedidos = [];
+
+    foreach ($rows as $row) {
+      $idPedido = (int) $row['id_pedido'];
+
+      if (!isset($pedidos[$idPedido])) {
+        $pedidos[$idPedido] = [
+          'id_pedido' => $idPedido,
+          'id_oficina' => (int) $row['id_oficina'],
+          'nombre_oficina' => (string) $row['nombre_oficina'],
+          'estado' => (string) $row['estado'],
+          'observaciones' => (string) ($row['observaciones'] ?? ''),
+          'fecha_pedido' => (string) $row['fecha_pedido'],
+          'fecha_entrega' => $row['fecha_entrega'] !== null ? (string) $row['fecha_entrega'] : null,
+          'items' => [],
+        ];
+      }
+
+      $pedidos[$idPedido]['items'][] = [
+        'id_producto' => (int) $row['id_producto'],
+        'sku' => (string) $row['sku'],
+        'nombre_producto' => (string) $row['nombre_producto'],
+        'cantidad' => (int) $row['cantidad'],
+      ];
+    }
+
+    return array_values($pedidos);
+  }
 }

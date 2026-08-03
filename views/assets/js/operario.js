@@ -1,6 +1,8 @@
 const API_BASE = (window.API_BASE || "../api").replace(/\/+$/, "");
 const API_CATALOGO = `${API_BASE}/catalogo.php`;
 const API_GUARDAR_PEDIDO = `${API_BASE}/guardar_pedido.php`;
+const API_LOGIN = `${API_BASE}/login.php`;
+const API_HISTORIAL = `${API_BASE}/historial_pedidos.php`;
 
 const state = {
   productos: [],
@@ -21,12 +23,17 @@ const refs = {
   idUsuario: document.getElementById("idUsuario"),
   idArea: document.getElementById("idArea"),
   observaciones: document.getElementById("observaciones"),
+  historialBody: document.getElementById("historialBody"),
+  btnRecargarHistorial: document.getElementById("btnRecargarHistorial"),
   mensajeEstado: document.getElementById("mensajeEstado"),
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
+  const autenticado = await inicializarSesion();
+  if (!autenticado) return;
   cargarCatalogo();
+  cargarHistorial();
 });
 
 function bindEvents() {
@@ -35,6 +42,51 @@ function bindEvents() {
   refs.filtroBusqueda.addEventListener("input", renderCatalogo);
   refs.filtroConStock.addEventListener("change", renderCatalogo);
   refs.btnLimpiarFiltros.addEventListener("click", limpiarFiltros);
+  refs.btnRecargarHistorial.addEventListener("click", cargarHistorial);
+}
+
+async function inicializarSesion() {
+  try {
+    const data = await requestJson(API_LOGIN, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    const usuario = data.data?.usuario || {};
+    const rol = String(usuario.rol || "")
+      .trim()
+      .toLowerCase();
+    if (rol !== "operario") {
+      window.location.href = rutaPorRol(rol);
+      return false;
+    }
+
+    refs.idUsuario.value = String(Number(usuario.id_usuario || 0));
+    refs.idArea.value = String(
+      Number(usuario.id_area || usuario.id_oficina || 0),
+    );
+    refs.idUsuario.readOnly = true;
+    refs.idArea.readOnly = true;
+    return true;
+  } catch (error) {
+    window.location.href = "login.html";
+    return false;
+  }
+}
+
+function rutaPorRol(rol) {
+  const rolNormalizado = String(rol || "")
+    .trim()
+    .toLowerCase();
+  const mapa = {
+    inventarista: "inventarista.html",
+    director: "directivos.html",
+    directivo: "directivos.html",
+    operario: "operario.html",
+    paqueteria: "paqueteria.html",
+  };
+
+  return mapa[rolNormalizado] || "login.html";
 }
 
 function limpiarFiltros() {
@@ -213,18 +265,11 @@ function renderCarrito() {
 }
 
 async function confirmarPedido() {
-  const idUsuario = Number(refs.idUsuario.value || 0);
-  const idArea = Number(refs.idArea.value || 0);
   const observaciones = refs.observaciones.value.trim();
   const items = Array.from(state.carrito.values()).map((item) => ({
     id_producto: item.id_producto,
     cantidad: item.cantidad,
   }));
-
-  if (idUsuario <= 0 || idArea <= 0) {
-    setEstado("Debes ingresar ID de usuario y área validos.", true);
-    return;
-  }
 
   if (items.length === 0) {
     setEstado("El carrito esta vacio.", true);
@@ -241,8 +286,6 @@ async function confirmarPedido() {
         Accept: "application/json",
       },
       body: JSON.stringify({
-        id_usuario: idUsuario,
-        id_oficina: idArea,
         observaciones,
         items,
       }),
@@ -263,6 +306,68 @@ async function confirmarPedido() {
     console.error(error);
     setEstado("Error al guardar pedido: " + error.message, true);
   }
+}
+
+async function cargarHistorial() {
+  try {
+    const data = await requestJson(API_HISTORIAL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    renderHistorial(Array.isArray(data.data) ? data.data : []);
+  } catch (error) {
+    renderHistorial([]);
+    setEstado("No fue posible cargar historial: " + error.message, true);
+  }
+}
+
+function renderHistorial(pedidos) {
+  refs.historialBody.innerHTML = "";
+
+  if (!Array.isArray(pedidos) || pedidos.length === 0) {
+    refs.historialBody.innerHTML =
+      '<tr><td colspan="4">No hay solicitudes registradas.</td></tr>';
+    return;
+  }
+
+  for (const pedido of pedidos) {
+    const tr = document.createElement("tr");
+    const items = Array.isArray(pedido.items)
+      ? pedido.items
+          .map(
+            (item) =>
+              `${escapeHtml(item.nombre_producto || "-")} (${Number(item.cantidad || 0)})`,
+          )
+          .join("<br>")
+      : "Sin items";
+
+    tr.innerHTML = `
+      <td>#${Number(pedido.id_pedido || 0)}</td>
+      <td>${escapeHtml(pedido.fecha_pedido || "-")}</td>
+      <td>${escapeHtml(pedido.estado || "-")}</td>
+      <td>${items}</td>
+    `;
+    refs.historialBody.appendChild(tr);
+  }
+}
+
+async function requestJson(url, options) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (error) {
+    throw new Error("La API devolvio una respuesta no valida en JSON.");
+  }
+
+  if (!response.ok || !data.ok) {
+    throw new Error(data.mensaje || "Error en la operacion con la API.");
+  }
+
+  return data;
 }
 
 function setEstado(mensaje, isError = false) {
