@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../controllers/AuthSession.php';
-require_once __DIR__ . '/../models/AuthModel.php';
+require_once __DIR__ . '/../conexion.php';
 
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json; charset=utf-8');
 
@@ -17,7 +16,18 @@ if ($method === 'OPTIONS') {
   exit;
 }
 
-AuthSession::start();
+if ($method !== 'POST') {
+  http_response_code(405);
+  echo json_encode([
+    'ok' => false,
+    'mensaje' => 'Metodo no permitido.',
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+  session_start();
+}
 
 function responder(int $statusCode, array $payload): void
 {
@@ -25,58 +35,17 @@ function responder(int $statusCode, array $payload): void
   echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
-function vistaPorRol(string $rol): string
+function urlPorRol(string $rol): string
 {
-  $rolNormalizado = strtolower(trim($rol));
-
-  return match ($rolNormalizado) {
-    'inventarista' => 'inventarista.html',
-    'director', 'directivo' => 'directivos.html',
-    'operario' => 'operario.html',
-    'paqueteria' => 'paqueteria.html',
-    default => 'catalogo.html',
+  return match (strtolower(trim($rol))) {
+    'secretario' => 'secretario.html',
+    'director_general' => 'director.html',
+    'almacenista' => 'almacenista.html',
+    default => 'login.html',
   };
 }
 
 try {
-  if ($method === 'GET') {
-    $user = AuthSession::getUser();
-    if ($user === null) {
-      responder(401, [
-        'ok' => false,
-        'mensaje' => 'No hay sesion activa.',
-      ]);
-      exit;
-    }
-
-    responder(200, [
-      'ok' => true,
-      'mensaje' => 'Sesion activa.',
-      'data' => [
-        'usuario' => $user,
-        'vista_recomendada' => vistaPorRol((string) $user['rol']),
-      ],
-    ]);
-    exit;
-  }
-
-  if ($method === 'DELETE') {
-    AuthSession::clear();
-    responder(200, [
-      'ok' => true,
-      'mensaje' => 'Sesion cerrada correctamente.',
-    ]);
-    exit;
-  }
-
-  if ($method !== 'POST') {
-    responder(405, [
-      'ok' => false,
-      'mensaje' => 'Metodo no permitido.',
-    ]);
-    exit;
-  }
-
   $rawBody = file_get_contents('php://input') ?: '';
   $payload = json_decode($rawBody, true);
 
@@ -99,10 +68,19 @@ try {
     exit;
   }
 
-  $authModel = new AuthModel();
-  $user = $authModel->validarCredenciales($username, $password);
+  $pdo = Conexion::getInstancia();
+  $stmt = $pdo->prepare(
+    "
+      SELECT id_usuario, id_area, username, password_hash, rol, activo
+      FROM usuarios
+      WHERE username = :username
+      LIMIT 1
+    "
+  );
+  $stmt->execute([':username' => $username]);
+  $usuario = $stmt->fetch();
 
-  if ($user === null) {
+  if ($usuario === false || (int) ($usuario['activo'] ?? 0) !== 1) {
     responder(401, [
       'ok' => false,
       'mensaje' => 'Credenciales invalidas.',
@@ -110,15 +88,42 @@ try {
     exit;
   }
 
+  $hash = (string) ($usuario['password_hash'] ?? '');
+  if (!password_verify($password, $hash)) {
+    responder(401, [
+      'ok' => false,
+      'mensaje' => 'Credenciales invalidas.',
+    ]);
+    exit;
+  }
+
+  $rol = strtolower(trim((string) ($usuario['rol'] ?? '')));
+  if (!in_array($rol, ['secretario', 'director_general', 'almacenista'], true)) {
+    responder(403, [
+      'ok' => false,
+      'mensaje' => 'Rol no autorizado.',
+    ]);
+    exit;
+  }
+
   session_regenerate_id(true);
-  AuthSession::setUser($user);
+  $_SESSION['id_usuario'] = (int) $usuario['id_usuario'];
+  $_SESSION['rol'] = $rol;
+  $_SESSION['id_area'] = isset($usuario['id_area']) ? (int) $usuario['id_area'] : null;
+
+  $redirectUrl = urlPorRol($rol);
 
   responder(200, [
     'ok' => true,
     'mensaje' => 'Inicio de sesion exitoso.',
     'data' => [
-      'usuario' => $user,
-      'vista_recomendada' => vistaPorRol((string) $user['rol']),
+      'usuario' => [
+        'id_usuario' => (int) $usuario['id_usuario'],
+        'rol' => $rol,
+        'id_area' => isset($usuario['id_area']) ? (int) $usuario['id_area'] : null,
+        'username' => (string) $usuario['username'],
+      ],
+      'redirect_url' => $redirectUrl,
     ],
   ]);
 } catch (Throwable $e) {

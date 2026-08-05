@@ -1,103 +1,60 @@
 const API_BASE = (window.API_BASE || "../api").replace(/\/+$/, "");
-const API_PEDIDOS = `${API_BASE}/pedidos_pendientes.php`;
-const API_APROBAR_UNIFICAR = `${API_BASE}/aprobar_unificar.php`;
-const API_LOGIN = `${API_BASE}/login.php`;
+const API_PEDIDOS = `${API_BASE}/pedidos_director.php`;
+const API_PROCESAR = `${API_BASE}/procesar_pedido_director.php`;
 
 const state = {
   pedidos: [],
-  seleccionados: new Set(),
+  pedidoActivo: null,
 };
 
 const refs = {
   btnRecargar: document.getElementById("btnRecargar"),
   btnAprobar: document.getElementById("btnAprobar"),
-  selectAll: document.getElementById("selectAll"),
-  idArea: document.getElementById("idArea"),
+  btnRechazar: document.getElementById("btnRechazar"),
   pedidosBody: document.getElementById("pedidosBody"),
+  detalleBody: document.getElementById("detalleBody"),
+  pedidoSeleccionado: document.getElementById("pedidoSeleccionado"),
+  motivoRechazo: document.getElementById("motivoRechazo"),
   mensajeEstado: document.getElementById("mensajeEstado"),
-  seleccionResumen: document.getElementById("seleccionResumen"),
 };
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
-  const autenticado = await inicializarSesion();
-  if (!autenticado) return;
   cargarPedidos();
 });
 
 function bindEvents() {
-  refs.btnRecargar.addEventListener("click", cargarPedidos);
-  refs.btnAprobar.addEventListener("click", aprobarYUnificar);
-  refs.selectAll.addEventListener("change", toggleSeleccionTodos);
-  refs.idArea.addEventListener("change", cargarPedidos);
-}
-
-async function inicializarSesion() {
-  try {
-    const data = await requestJson(API_LOGIN, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-
-    const usuario = data.data?.usuario || {};
-    const rol = String(usuario.rol || "")
-      .trim()
-      .toLowerCase();
-    if (!["director", "directivo"].includes(rol)) {
-      window.location.href = rutaPorRol(rol);
-      return false;
-    }
-
-    refs.idArea.value = String(
-      Number(usuario.id_area || usuario.id_oficina || 0),
-    );
-    refs.idArea.readOnly = true;
-    return true;
-  } catch (error) {
-    window.location.href = "login.html";
-    return false;
-  }
-}
-
-function rutaPorRol(rol) {
-  const rolNormalizado = String(rol || "")
-    .trim()
-    .toLowerCase();
-  const mapa = {
-    inventarista: "inventarista.html",
-    director: "directivos.html",
-    directivo: "directivos.html",
-    operario: "operario.html",
-    paqueteria: "paqueteria.html",
-  };
-
-  return mapa[rolNormalizado] || "login.html";
+  refs.btnRecargar?.addEventListener("click", cargarPedidos);
+  refs.btnAprobar?.addEventListener("click", () => procesarPedido("aprobar"));
+  refs.btnRechazar?.addEventListener("click", () => procesarPedido("rechazar"));
 }
 
 async function cargarPedidos() {
-  const idArea = Number(refs.idArea.value || 0);
-  setEstado("Cargando pedidos pendientes...");
+  setEstado("Cargando pedidos pendientes de direccion...");
 
   try {
-    const url = new URL(API_PEDIDOS, window.location.href);
-    if (idArea > 0) url.searchParams.set("id_oficina", String(idArea));
-
-    const response = await fetch(url, {
+    const response = await fetch(API_PEDIDOS, {
       method: "GET",
       headers: { Accept: "application/json" },
     });
 
     const data = await response.json();
+
+    if (response.status === 401) {
+      window.location.href = "login.html";
+      return;
+    }
+
     if (!response.ok || !data.ok) {
       throw new Error(data.mensaje || "No fue posible cargar los pedidos.");
     }
 
     state.pedidos = Array.isArray(data.data) ? data.data : [];
-    state.seleccionados.clear();
+    state.pedidoActivo = null;
     renderPedidos();
+    renderDetalle();
     setEstado("Pedidos cargados correctamente.");
   } catch (error) {
-    console.error(error);
     setEstado("Error al cargar pedidos: " + error.message, true);
   }
 }
@@ -107,138 +64,146 @@ function renderPedidos() {
 
   if (state.pedidos.length === 0) {
     refs.pedidosBody.innerHTML =
-      '<tr><td colspan="5" class="muted">No hay pedidos pendientes de aprobación para este área.</td></tr>';
-    refs.selectAll.checked = false;
-    actualizarResumen();
+      '<tr><td colspan="5" class="muted">No hay pedidos en PENDIENTE_DIRECTOR.</td></tr>';
     return;
   }
 
   for (const pedido of state.pedidos) {
     const tr = document.createElement("tr");
     const idPedido = Number(pedido.id_pedido || 0);
-    const checked = state.seleccionados.has(idPedido);
 
     tr.innerHTML = `
-      <td><input type="checkbox" class="pedido-check" data-id="${idPedido}" ${checked ? "checked" : ""} /></td>
-      <td>#${idPedido}<br /><span class="muted">${escapeHtml(pedido.nombre_oficina || "-")}</span></td>
-      <td>${escapeHtml(pedido.observaciones || "Sin observaciones")}</td>
-      <td>${escapeHtml(pedido.fecha_pedido || "-")}</td>
-      <td>${renderItems(pedido.items || [])}</td>
+      <td>#${idPedido}</td>
+      <td>${escapeHtml(pedido.nombre_area || "-")}</td>
+      <td>${escapeHtml(pedido.nombre_secretario || "-")}</td>
+      <td>${escapeHtml(pedido.fecha_creacion || "-")}</td>
+      <td><button type="button" data-id="${idPedido}">Ver detalle</button></td>
     `;
 
-    tr.querySelector(".pedido-check").addEventListener("change", (event) => {
-      const target = event.target;
-      const id = Number(target.dataset.id || 0);
-      if (target.checked) {
-        state.seleccionados.add(id);
-      } else {
-        state.seleccionados.delete(id);
-      }
-      actualizarResumen();
-      refs.selectAll.checked =
-        state.seleccionados.size === state.pedidos.length;
+    tr.querySelector("button")?.addEventListener("click", () => {
+      state.pedidoActivo = structuredClone(pedido);
+      refs.motivoRechazo.value = "";
+      renderDetalle();
     });
 
     refs.pedidosBody.appendChild(tr);
   }
-
-  refs.selectAll.checked =
-    state.seleccionados.size === state.pedidos.length &&
-    state.pedidos.length > 0;
-  actualizarResumen();
 }
 
-function renderItems(items) {
-  if (!Array.isArray(items) || items.length === 0) {
-    return '<span class="muted">Sin items</span>';
-  }
+function renderDetalle() {
+  refs.detalleBody.innerHTML = "";
 
-  return items
-    .map(
-      (item) =>
-        `${escapeHtml(item.nombre_producto || "-")} (${Number(item.cantidad || 0)})`,
-    )
-    .join("<br />");
-}
-
-function toggleSeleccionTodos() {
-  const checked = refs.selectAll.checked;
-  state.seleccionados.clear();
-  if (checked) {
-    for (const pedido of state.pedidos) {
-      state.seleccionados.add(Number(pedido.id_pedido || 0));
-    }
-  }
-  renderPedidos();
-}
-
-function actualizarResumen() {
-  refs.seleccionResumen.textContent = `${state.seleccionados.size} seleccionados`;
-}
-
-async function aprobarYUnificar() {
-  if (state.seleccionados.size === 0) {
-    setEstado("Selecciona al menos un pedido para aprobar.", true);
+  if (!state.pedidoActivo) {
+    refs.pedidoSeleccionado.textContent =
+      "Selecciona un pedido para editar cantidades.";
+    refs.detalleBody.innerHTML =
+      '<tr><td colspan="3" class="muted">Sin pedido seleccionado.</td></tr>';
     return;
   }
 
+  refs.pedidoSeleccionado.textContent = `Pedido #${Number(state.pedidoActivo.id_pedido || 0)} - Area ${state.pedidoActivo.nombre_area || "-"}`;
+
+  const items = Array.isArray(state.pedidoActivo.items)
+    ? state.pedidoActivo.items
+    : [];
+  if (items.length === 0) {
+    refs.detalleBody.innerHTML =
+      '<tr><td colspan="3" class="muted">Sin items.</td></tr>';
+    return;
+  }
+
+  for (const item of items) {
+    const tr = document.createElement("tr");
+    const idProducto = Number(item.id_producto || 0);
+
+    tr.innerHTML = `
+      <td>${escapeHtml(item.sku || "-")}</td>
+      <td>${escapeHtml(item.nombre || "-")}</td>
+      <td>
+        <input class="qty-input" type="number" min="1" value="${Number(item.cantidad || 1)}" data-id="${idProducto}" />
+      </td>
+    `;
+
+    tr.querySelector("input")?.addEventListener("change", (event) => {
+      const input = event.target;
+      const cantidad = Number(input.value || 0);
+      if (cantidad <= 0) {
+        input.value = "1";
+        return;
+      }
+
+      const itemActivo = state.pedidoActivo.items.find(
+        (x) => Number(x.id_producto) === idProducto,
+      );
+      if (itemActivo) {
+        itemActivo.cantidad = cantidad;
+      }
+    });
+
+    refs.detalleBody.appendChild(tr);
+  }
+}
+
+async function procesarPedido(accion) {
+  if (!state.pedidoActivo) {
+    setEstado("Debes seleccionar un pedido.", true);
+    return;
+  }
+
+  const esAprobacion = accion === "aprobar";
   const confirmar = window.confirm(
-    "¿Deseas aprobar y unificar los pedidos seleccionados?",
+    esAprobacion
+      ? "¿Aprobar pedido y enviarlo a almacen?"
+      : "¿Rechazar pedido?",
   );
+
   if (!confirmar) {
     return;
   }
 
-  setEstado("Aprobando y unificando pedidos...");
+  const cantidades = (
+    Array.isArray(state.pedidoActivo.items) ? state.pedidoActivo.items : []
+  ).map((item) => ({
+    id_producto: Number(item.id_producto || 0),
+    cantidad: Number(item.cantidad || 0),
+  }));
+
+  const payload = {
+    id_pedido: Number(state.pedidoActivo.id_pedido || 0),
+    accion,
+    cantidades,
+    motivo_rechazo: String(refs.motivoRechazo.value || "").trim(),
+  };
+
+  setEstado(esAprobacion ? "Aprobando pedido..." : "Rechazando pedido...");
 
   try {
-    const response = await fetch(API_APROBAR_UNIFICAR, {
+    const response = await fetch(API_PROCESAR, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({ id_pedidos: Array.from(state.seleccionados) }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
-    if (!response.ok || !data.ok) {
-      throw new Error(
-        data.mensaje || "No fue posible aprobar y unificar los pedidos.",
-      );
+
+    if (response.status === 401) {
+      window.location.href = "login.html";
+      return;
     }
 
-    state.seleccionados.clear();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.mensaje || "No fue posible procesar el pedido.");
+    }
+
+    state.pedidoActivo = null;
     await cargarPedidos();
-    setEstado("Pedidos aprobados y unificados correctamente.");
-    window.alert(
-      `Pedido unificado creado correctamente. ID: ${data.data.id_pedido_unificado}`,
-    );
+    setEstado(data.mensaje || "Pedido procesado correctamente.");
   } catch (error) {
-    console.error(error);
-    setEstado("Error al aprobar y unificar: " + error.message, true);
-    window.alert(
-      "No fue posible aprobar y unificar los pedidos: " + error.message,
-    );
+    setEstado("Error al procesar pedido: " + error.message, true);
   }
-}
-
-async function requestJson(url, options) {
-  const response = await fetch(url, options);
-  const text = await response.text();
-
-  let data;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch (error) {
-    throw new Error("La API devolvio una respuesta no valida en JSON.");
-  }
-
-  if (!response.ok || !data.ok) {
-    throw new Error(data.mensaje || "Error en la operacion con la API.");
-  }
-
-  return data;
 }
 
 function setEstado(mensaje, isError = false) {

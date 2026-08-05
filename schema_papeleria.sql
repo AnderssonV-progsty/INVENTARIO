@@ -298,7 +298,15 @@ END
 WHERE rol IN ('ADMIN_ALMACEN','OFICINA');
 
 ALTER TABLE usuarios
-  MODIFY COLUMN rol ENUM('inventarista','director','operario','paqueteria') NOT NULL DEFAULT 'operario';
+  MODIFY COLUMN rol ENUM(
+    'inventarista',
+    'director',
+    'operario',
+    'paqueteria',
+    'secretario',
+    'director_general',
+    'almacenista'
+  ) NOT NULL DEFAULT 'operario';
 
 CREATE TABLE IF NOT EXISTS producto_area (
   id_producto INT UNSIGNED NOT NULL,
@@ -329,10 +337,33 @@ INSERT IGNORE INTO oficinas (nombre, codigo) VALUES
 ('Oficina Administrativa', 'ADM'),
 ('Talento Humano', 'TH');
 
-INSERT IGNORE INTO usuarios (id_oficina, username, password_hash, nombre_completo, email, rol)
+-- Sincroniza las áreas después de crear las oficinas de ejemplo.
+INSERT INTO areas (id_area, nombre, codigo, activa, created_at, updated_at)
+SELECT id_oficina, nombre, codigo, activa, created_at, updated_at
+FROM oficinas
+ON DUPLICATE KEY UPDATE
+  nombre = VALUES(nombre),
+  codigo = VALUES(codigo),
+  activa = VALUES(activa);
+
+-- Único bloque de usuarios iniciales. Puede ejecutarse varias veces sin duplicarlos.
+-- Todos usan la clave inicial 123456; cámbiala antes de usar el sistema en producción.
+INSERT INTO usuarios
+  (id_oficina, id_area, username, password_hash, nombre_completo, email, rol, activo)
 VALUES
-(NULL, 'admin_almacen', '123456', 'Administrador Almacen', 'admin@empresa.local', 'director'),
-(1, 'oficina_adm', '123456', 'Usuario Oficina ADM', 'adm@empresa.local', 'operario');
+(NULL, NULL, 'admin_almacen', '$2y$10$l6wv/1USYkxuHd5dG10uGuVDmkNIEaeveK.gar/N67cQIZuvfzzvy', 'Administrador Almacén', 'admin@empresa.local', 'director', 1),
+(1, 1, 'oficina_adm', '$2y$10$l6wv/1USYkxuHd5dG10uGuVDmkNIEaeveK.gar/N67cQIZuvfzzvy', 'Usuario Oficina ADM', 'adm@empresa.local', 'operario', 1),
+(1, 1, 'secretario', '$2y$10$l6wv/1USYkxuHd5dG10uGuVDmkNIEaeveK.gar/N67cQIZuvfzzvy', 'Secretario Administrativo', 'secretario@empresa.local', 'secretario', 1),
+(NULL, NULL, 'director_general', '$2y$10$l6wv/1USYkxuHd5dG10uGuVDmkNIEaeveK.gar/N67cQIZuvfzzvy', 'Director General', 'director.general@empresa.local', 'director_general', 1),
+(NULL, NULL, 'almacenista', '$2y$10$l6wv/1USYkxuHd5dG10uGuVDmkNIEaeveK.gar/N67cQIZuvfzzvy', 'Responsable de Almacén', 'almacenista@empresa.local', 'almacenista', 1)
+ON DUPLICATE KEY UPDATE
+  id_oficina = VALUES(id_oficina),
+  id_area = VALUES(id_area),
+  password_hash = VALUES(password_hash),
+  nombre_completo = VALUES(nombre_completo),
+  email = VALUES(email),
+  rol = VALUES(rol),
+  activo = VALUES(activo);
 
 INSERT IGNORE INTO productos (sku, nombre, descripcion, unidad_medida, stock_actual, stock_minimo)
 VALUES

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Almacenista - Inventario y Despachos</title>
+    <link rel="stylesheet" href="assets/css/catalogo.css" />
+    <style>
+      .tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .tab-btn.active {
+        background: #0f766e;
+        color: #fff;
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      .grid {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table th,
+      .table td {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 0.55rem;
+      }
+
+      .area-tags {
+        font-size: 0.85rem;
+        color: #334155;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.7rem;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.6rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrapper">
+      <header class="page-header">
+        <span class="page-role-tag">Rol Almacenista</span>
+        <h1>Administracion y Despachos</h1>
+        <p>Gestiona productos por area y despacha pedidos listos.</p>
+      </header>
+
+      <section class="panel">
+        <div class="tabs">
+          <button class="tab-btn active" type="button" data-tab="productos">
+            Productos
+          </button>
+          <button class="tab-btn" type="button" data-tab="despachos">
+            Despachos
+          </button>
+        </div>
+
+        <div id="tab-productos" class="tab-panel active">
+          <div class="grid">
+            <h2>CRUD de productos</h2>
+            <input type="hidden" id="idProducto" />
+            <div class="form-grid">
+              <label>SKU <input type="text" id="sku" maxlength="50" /></label>
+              <label
+                >Nombre <input type="text" id="nombre" maxlength="150"
+              /></label>
+              <label
+                >Unidad
+                <input type="text" id="unidadMedida" value="UND" maxlength="20"
+              /></label>
+              <label
+                >Stock actual
+                <input type="number" id="stockActual" min="0" value="0"
+              /></label>
+              <label
+                >Stock minimo
+                <input type="number" id="stockMinimo" min="0" value="0"
+              /></label>
+              <label
+                >Activo
+                <select id="activo">
+                  <option value="1">Si</option>
+                  <option value="0">No</option>
+                </select>
+              </label>
+            </div>
+            <label>Descripcion</label>
+            <textarea id="descripcion" rows="2"></textarea>
+
+            <div>
+              <strong>Areas habilitadas</strong>
+              <div id="areasContainer"></div>
+            </div>
+
+            <div class="actions">
+              <button id="btnNuevo" type="button">Nuevo</button>
+              <button id="btnGuardar" type="button" class="btn-primary">
+                Guardar
+              </button>
+            </div>
+
+            <div style="overflow-x: auto">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>SKU</th>
+                    <th>Nombre</th>
+                    <th>Stock</th>
+                    <th>Areas</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="productosBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-despachos" class="tab-panel">
+          <div class="grid">
+            <div class="section-title">
+              <h2>Pedidos LISTO_DESPACHO</h2>
+              <button id="btnRecargarDespachos" type="button">Recargar</button>
+            </div>
+
+            <div style="overflow-x: auto">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Pedido</th>
+                    <th>Area</th>
+                    <th>Items</th>
+                    <th>Accion</th>
+                  </tr>
+                </thead>
+                <tbody id="despachosBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel status-panel">
+        <h2>Estado</h2>
+        <p id="mensajeEstado">Listo para operar.</p>
+      </section>
+    </main>
+
+    <script src="assets/js/api-config.js"></script>
+    <script src="assets/js/almacenista.js"></script>
+  </body>
+</html>

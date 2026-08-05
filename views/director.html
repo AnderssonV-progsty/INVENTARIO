@@ -3,86 +3,128 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Director - Pedidos para aprobación</title>
+    <title>Director General - Aprobacion de pedidos</title>
     <link rel="stylesheet" href="assets/css/catalogo.css" />
     <style>
-      .table-wrap {
+      .layout {
+        display: grid;
+        gap: 1rem;
+      }
+
+      @media (min-width: 980px) {
+        .layout {
+          grid-template-columns: 1fr 1fr;
+          align-items: start;
+        }
+      }
+
+      .table-wrap,
+      .detail-wrap {
         overflow-x: auto;
       }
 
-      .pedidos-table {
+      .pedidos-table,
+      .detalle-table {
         width: 100%;
         border-collapse: collapse;
       }
 
       .pedidos-table th,
-      .pedidos-table td {
+      .pedidos-table td,
+      .detalle-table th,
+      .detalle-table td {
         border-bottom: 1px solid #e5e7eb;
-        padding: 8px 6px;
+        padding: 8px;
         text-align: left;
         vertical-align: top;
       }
 
-      .actions-row {
+      .actions-row,
+      .detail-actions {
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
+        flex-wrap: wrap;
         align-items: center;
         gap: 10px;
-        margin-top: 10px;
+        margin-top: 0.8rem;
       }
 
       .muted {
         color: #6b7280;
+      }
+
+      .qty-input {
+        width: 90px;
       }
     </style>
   </head>
   <body class="view-director">
     <main class="wrapper">
       <header class="page-header">
-        <span class="page-role-tag">Vista Director</span>
-        <h1>Vista Director</h1>
-        <p>Aprueba y unifica pedidos de tu área</p>
+        <span class="page-role-tag">Rol Director General</span>
+        <h1>Aprobacion central de pedidos</h1>
+        <p>Revisa pedidos de todas las areas en PENDIENTE_DIRECTOR.</p>
       </header>
 
-      <section class="panel">
-        <div class="section-title">
-          <h2>Navegación</h2>
-          <a href="catalogo.html" class="btn-secondary">Ir a vista Catalogo</a>
-        </div>
-      </section>
+      <section class="layout">
+        <article class="panel">
+          <div class="section-title">
+            <h2>Pedidos PENDIENTE_DIRECTOR</h2>
+            <button id="btnRecargar" type="button">Recargar</button>
+          </div>
 
-      <section class="panel">
-        <div class="section-title">
-          <h2>Pedidos pendientes de aprobación</h2>
-          <button id="btnRecargar" type="button">Recargar</button>
-        </div>
+          <div class="table-wrap">
+            <table class="pedidos-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Area</th>
+                  <th>Secretario</th>
+                  <th>Fecha</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody id="pedidosBody"></tbody>
+            </table>
+          </div>
+        </article>
 
-        <label>
-          ID Área
-          <input type="number" id="idArea" min="1" value="1" required />
-        </label>
+        <article class="panel">
+          <div class="section-title">
+            <h2>Detalle del pedido</h2>
+          </div>
 
-        <div class="actions-row">
-          <span id="seleccionResumen" class="muted">0 seleccionados</span>
-          <button id="btnAprobar" type="button" class="btn-primary">
-            Aprobar y Unificar Pedidos
-          </button>
-        </div>
+          <p id="pedidoSeleccionado" class="muted">
+            Selecciona un pedido para editar cantidades.
+          </p>
 
-        <div class="table-wrap">
-          <table class="pedidos-table">
-            <thead>
-              <tr>
-                <th><input type="checkbox" id="selectAll" /></th>
-                <th>Pedido</th>
-                <th>Observaciones</th>
-                <th>Fecha</th>
-                <th>Items</th>
-              </tr>
-            </thead>
-            <tbody id="pedidosBody"></tbody>
-          </table>
-        </div>
+          <div class="detail-wrap">
+            <table class="detalle-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                </tr>
+              </thead>
+              <tbody id="detalleBody"></tbody>
+            </table>
+          </div>
+
+          <label for="motivoRechazo">Motivo rechazo (opcional)</label>
+          <textarea
+            id="motivoRechazo"
+            rows="2"
+            placeholder="Solo aplica cuando rechazas"
+          ></textarea>
+
+          <div class="detail-actions">
+            <button id="btnRechazar" type="button">Rechazar</button>
+            <button id="btnAprobar" type="button" class="btn-primary">
+              Aprobar y enviar a almacen
+            </button>
+          </div>
+        </article>
       </section>
 
       <section class="panel status-panel">
