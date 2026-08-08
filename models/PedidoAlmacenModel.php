@@ -18,15 +18,15 @@ final class PedidoAlmacenModel
     $sqlPedidos = "
       SELECT
         p.id_pedido,
-        p.id_oficina AS id_area,
+        COALESCE(p.id_area, p.id_oficina) AS id_area,
         a.nombre AS nombre_area,
         u.nombre_completo AS nombre_secretario,
         p.observaciones,
-        p.fecha_pedido AS fecha_creacion,
+        COALESCE(p.fecha_creacion, p.fecha_pedido) AS fecha_creacion,
         p.estado
       FROM pedidos p
-      INNER JOIN areas a ON a.id_area = p.id_oficina
-      INNER JOIN usuarios u ON u.id_usuario = p.id_usuario_solicitante
+      INNER JOIN areas a ON a.id_area = COALESCE(p.id_area, p.id_oficina)
+      INNER JOIN usuarios u ON u.id_usuario = COALESCE(p.id_usuario_secretario, p.id_usuario_solicitante)
       WHERE p.estado = 'LISTO_DESPACHO'
       ORDER BY p.fecha_pedido ASC
     ";
@@ -91,7 +91,9 @@ final class PedidoAlmacenModel
         UPDATE pedidos
         SET estado = 'ENTREGADO',
             id_usuario_almacenista = :id_usuario_almacenista,
-            fecha_despacho = NOW()
+            id_usuario_entrega = :id_usuario_almacenista,
+            fecha_despacho = NOW(),
+            fecha_entrega = NOW()
         WHERE id_pedido = :id_pedido
           AND estado = 'LISTO_DESPACHO'
       "

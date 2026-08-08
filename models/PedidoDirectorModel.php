@@ -18,18 +18,18 @@ final class PedidoDirectorModel
     $sqlPedidos = "
       SELECT
         p.id_pedido,
-        p.id_area,
+        COALESCE(p.id_area, p.id_oficina) AS id_area,
         a.nombre AS nombre_area,
-        p.id_usuario_secretario,
+        COALESCE(p.id_usuario_secretario, p.id_usuario_solicitante) AS id_usuario_secretario,
         u.nombre_completo AS nombre_secretario,
         p.observaciones,
-        p.fecha_creacion,
+        COALESCE(p.fecha_creacion, p.fecha_pedido) AS fecha_creacion,
         p.estado
       FROM pedidos p
-      INNER JOIN areas a ON a.id_area = p.id_area
-      INNER JOIN usuarios u ON u.id_usuario = p.id_usuario_secretario
+      INNER JOIN areas a ON a.id_area = COALESCE(p.id_area, p.id_oficina)
+      INNER JOIN usuarios u ON u.id_usuario = COALESCE(p.id_usuario_secretario, p.id_usuario_solicitante)
       WHERE p.estado = 'PENDIENTE_DIRECTOR'
-      ORDER BY p.fecha_creacion ASC
+      ORDER BY p.fecha_pedido ASC
     ";
 
     $pedidos = $this->pdo->query($sqlPedidos)->fetchAll() ?: [];

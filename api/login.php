@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../conexion.php';
+require_once __DIR__ . '/../controllers/AuthSession.php';
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -107,9 +108,13 @@ try {
   }
 
   session_regenerate_id(true);
-  $_SESSION['id_usuario'] = (int) $usuario['id_usuario'];
-  $_SESSION['rol'] = $rol;
-  $_SESSION['id_area'] = isset($usuario['id_area']) ? (int) $usuario['id_area'] : null;
+  AuthSession::setUser([
+    'id_usuario' => (int) $usuario['id_usuario'],
+    'rol' => $rol,
+    'id_area' => isset($usuario['id_area']) ? (int) $usuario['id_area'] : null,
+    'nombre_completo' => (string) ($usuario['nombre_completo'] ?? ''),
+    'username' => (string) ($usuario['username'] ?? ''),
+  ]);
 
   $redirectUrl = urlPorRol($rol);
 

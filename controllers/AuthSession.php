@@ -14,7 +14,7 @@ final class AuthSession
   public static function setUser(array $user): void
   {
     self::start();
-    $_SESSION['auth_user'] = [
+    $userData = [
       'id_usuario' => (int) ($user['id_usuario'] ?? 0),
       'rol' => (string) ($user['rol'] ?? ''),
       'id_area' => isset($user['id_area']) ? (int) $user['id_area'] : null,
@@ -22,6 +22,12 @@ final class AuthSession
       'nombre_completo' => (string) ($user['nombre_completo'] ?? ''),
       'username' => (string) ($user['username'] ?? ''),
     ];
+
+    $_SESSION['auth_user'] = $userData;
+    $_SESSION['id_usuario'] = $userData['id_usuario'];
+    $_SESSION['rol'] = $userData['rol'];
+    $_SESSION['id_area'] = $userData['id_area'];
+    $_SESSION['id_oficina'] = $userData['id_oficina'];
   }
 
   public static function clear(): void
@@ -40,7 +46,18 @@ final class AuthSession
     self::start();
     $user = $_SESSION['auth_user'] ?? null;
     if (!is_array($user)) {
-      return null;
+      if (isset($_SESSION['id_usuario'], $_SESSION['rol']) && (int) $_SESSION['id_usuario'] > 0) {
+        $user = [
+          'id_usuario' => (int) $_SESSION['id_usuario'],
+          'rol' => (string) $_SESSION['rol'],
+          'id_area' => isset($_SESSION['id_area']) ? (int) $_SESSION['id_area'] : null,
+          'id_oficina' => isset($_SESSION['id_oficina']) ? (int) $_SESSION['id_oficina'] : null,
+          'nombre_completo' => (string) ($_SESSION['nombre_completo'] ?? ''),
+          'username' => (string) ($_SESSION['username'] ?? ''),
+        ];
+      } else {
+        return null;
+      }
     }
 
     $idUsuario = (int) ($user['id_usuario'] ?? 0);

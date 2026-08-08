@@ -28,13 +28,15 @@ final class PedidoSecretarioModel
     try {
       $stmtPedido = $this->pdo->prepare(
         "
-          INSERT INTO pedidos (id_area, id_usuario_secretario, estado, observaciones)
-          VALUES (:id_area, :id_usuario_secretario, 'PENDIENTE_DIRECTOR', :observaciones)
+          INSERT INTO pedidos (id_oficina, id_area, id_usuario_solicitante, id_usuario_secretario, estado, observaciones)
+          VALUES (:id_oficina, :id_area, :id_usuario_solicitante, :id_usuario_secretario, 'PENDIENTE_DIRECTOR', :observaciones)
         "
       );
 
       $stmtPedido->execute([
+        ':id_oficina' => $idArea,
         ':id_area' => $idArea,
+        ':id_usuario_solicitante' => $idUsuarioSecretario,
         ':id_usuario_secretario' => $idUsuarioSecretario,
         ':observaciones' => $observaciones !== '' ? $observaciones : null,
       ]);

@@ -75,6 +75,83 @@ CREATE TABLE IF NOT EXISTS usuarios (
     ON UPDATE CASCADE
     ON DELETE SET NULL,
   CONSTRAINT fk_usuarios_area
+-- Script MySQL 8.x - Sistema de almacén y pedidos de papelería interna
+-- Crea base de datos, tablas, constraints e integridad de stock al entregar pedidos.
+
+CREATE DATABASE IF NOT EXISTS almacen_papeleria
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE almacen_papeleria;
+
+-- Limpieza para re-ejecuciones sobre bases ya creadas
+SET @old_check = (
+  SELECT CONSTRAINT_NAME
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'usuarios'
+    AND CONSTRAINT_TYPE = 'CHECK'
+    AND CONSTRAINT_NAME = 'ck_usuarios_oficina_rol'
+  LIMIT 1
+);
+
+SET @sql = IF(@old_check IS NOT NULL, CONCAT('ALTER TABLE usuarios DROP CONSTRAINT ', @old_check), 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Elimina triggers primero si ya existían (para re-ejecutar script sin errores)
+DROP TRIGGER IF EXISTS trg_pedido_before_update;
+DROP TRIGGER IF EXISTS trg_detalle_pedido_before_insert;
+DROP TRIGGER IF EXISTS trg_detalle_pedido_before_update;
+
+-- Tabla de oficinas/departamentos internos
+CREATE TABLE IF NOT EXISTS oficinas (
+  id_oficina INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(120) NOT NULL,
+  codigo VARCHAR(20) NOT NULL,
+  activa TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_oficinas_nombre (nombre),
+  UNIQUE KEY uq_oficinas_codigo (codigo)
+) ENGINE=InnoDB;
+
+-- Catálogo de áreas del negocio
+CREATE TABLE IF NOT EXISTS areas (
+  id_area INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(120) NOT NULL,
+  codigo VARCHAR(20) NOT NULL,
+  activa TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_areas_nombre (nombre),
+  UNIQUE KEY uq_areas_codigo (codigo)
+) ENGINE=InnoDB;
+
+-- Tabla de usuarios (oficinas y administrador)
+CREATE TABLE IF NOT EXISTS usuarios (
+  id_usuario INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  id_oficina INT UNSIGNED NULL,
+  id_area INT UNSIGNED NULL,
+  username VARCHAR(60) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  nombre_completo VARCHAR(120) NOT NULL,
+  email VARCHAR(120) NULL,
+  rol ENUM('inventarista','director','operario','paqueteria') NOT NULL DEFAULT 'operario',
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_usuarios_username (username),
+  UNIQUE KEY uq_usuarios_email (email),
+  KEY idx_usuarios_id_oficina (id_oficina),
+  KEY idx_usuarios_id_area (id_area),
+  CONSTRAINT fk_usuarios_oficinas
+    FOREIGN KEY (id_oficina)
+    REFERENCES oficinas(id_oficina)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL,
+  CONSTRAINT fk_usuarios_area
     FOREIGN KEY (id_area)
     REFERENCES areas(id_area)
     ON UPDATE CASCADE
@@ -93,45 +170,11 @@ CREATE TABLE IF NOT EXISTS productos (
   activo TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_productos_sku (sku),
-  KEY idx_productos_nombre (nombre)
+  UNIQUE KEY uq_productos_sku (sku)
 ) ENGINE=InnoDB;
 
--- Pedidos: estado de flujo (aprobacion -> entrega)
-CREATE TABLE IF NOT EXISTS pedidos (
-  id_pedido BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  id_usuario_solicitante INT UNSIGNED NOT NULL,
-  id_oficina INT UNSIGNED NOT NULL,
-  fecha_pedido DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  estado ENUM('PENDIENTE_APROBACION','PENDIENTE','ENTREGADO','CANCELADO','FUSIONADO') NOT NULL DEFAULT 'PENDIENTE_APROBACION',
-  observaciones VARCHAR(255) NULL,
-  fecha_entrega DATETIME NULL,
-  id_usuario_entrega INT UNSIGNED NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  KEY idx_pedidos_estado (estado),
-  KEY idx_pedidos_oficina (id_oficina),
-  KEY idx_pedidos_solicitante (id_usuario_solicitante),
-  CONSTRAINT fk_pedidos_usuario_solicitante
-    FOREIGN KEY (id_usuario_solicitante)
-    REFERENCES usuarios(id_usuario)
-    ON UPDATE CASCADE
-    ON DELETE RESTRICT,
-  CONSTRAINT fk_pedidos_oficina
-    FOREIGN KEY (id_oficina)
-    REFERENCES oficinas(id_oficina)
-    ON UPDATE CASCADE
-    ON DELETE RESTRICT,
-  CONSTRAINT fk_pedidos_usuario_entrega
-    FOREIGN KEY (id_usuario_entrega)
-    REFERENCES usuarios(id_usuario)
-    ON UPDATE CASCADE
-    ON DELETE SET NULL
-) ENGINE=InnoDB;
-
--- Detalle de productos por pedido
 CREATE TABLE IF NOT EXISTS detalle_pedidos (
-  id_detalle BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  id_detalle INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   id_pedido BIGINT UNSIGNED NOT NULL,
   id_producto INT UNSIGNED NOT NULL,
   cantidad INT UNSIGNED NOT NULL,
@@ -140,21 +183,15 @@ CREATE TABLE IF NOT EXISTS detalle_pedidos (
   UNIQUE KEY uq_detalle_pedido_producto (id_pedido, id_producto),
   KEY idx_detalle_id_producto (id_producto),
   CONSTRAINT fk_detalle_pedido
-    FOREIGN KEY (id_pedido)
-    REFERENCES pedidos(id_pedido)
-    ON UPDATE CASCADE
-    ON DELETE CASCADE,
+    FOREIGN KEY (id_pedido) REFERENCES pedidos(id_pedido)
+    ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT fk_detalle_producto
-    FOREIGN KEY (id_producto)
-    REFERENCES productos(id_producto)
-    ON UPDATE CASCADE
-    ON DELETE RESTRICT,
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT ck_detalle_cantidad_mayor_0 CHECK (cantidad > 0)
 ) ENGINE=InnoDB;
 
 DELIMITER $$
-
--- Evita insertar detalle en pedidos ya cerrados y valida stock
 CREATE TRIGGER trg_detalle_pedido_before_insert
 BEFORE INSERT ON detalle_pedidos
 FOR EACH ROW
@@ -162,155 +199,60 @@ BEGIN
   DECLARE v_estado VARCHAR(20);
   DECLARE v_stock INT UNSIGNED;
 
-  SELECT estado INTO v_estado
-  FROM pedidos
-  WHERE id_pedido = NEW.id_pedido;
+  INSERT INTO areas (id_area, nombre, codigo, activa, created_at, updated_at)
+  SELECT id_oficina, nombre, codigo, activa, created_at, updated_at
+  FROM oficinas
+  WHERE NOT EXISTS (
+    SELECT 1 FROM areas a WHERE a.id_area = oficinas.id_oficina
+  )
+  ON DUPLICATE KEY UPDATE
+    nombre = VALUES(nombre),
+    codigo = VALUES(codigo),
+    activa = VALUES(activa);
 
-  IF v_estado IS NULL THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Pedido no existe.';
-  END IF;
+  SET @has_id_area = (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'usuarios'
+      AND COLUMN_NAME = 'id_area'
+  );
 
-  IF v_estado NOT IN ('PENDIENTE_APROBACION', 'PENDIENTE') THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo se puede agregar detalle a pedidos pendientes o en aprobacion.';
-  END IF;
+  SET @sql_area = IF(@has_id_area = 0, 'ALTER TABLE usuarios ADD COLUMN id_area INT UNSIGNED NULL AFTER id_oficina', 'SELECT 1');
+  PREPARE stmt_area FROM @sql_area;
+  EXECUTE stmt_area;
+  DEALLOCATE PREPARE stmt_area;
 
-  SELECT stock_actual INTO v_stock
-  FROM productos
-  WHERE id_producto = NEW.id_producto;
+  UPDATE usuarios u
+  LEFT JOIN areas a ON a.id_area = u.id_oficina
+  SET u.id_area = u.id_oficina
+  WHERE u.id_area IS NULL AND u.id_oficina IS NOT NULL AND u.id_oficina IN (SELECT id_oficina FROM oficinas);
 
-  IF v_stock IS NULL THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto no existe.';
-  END IF;
+  UPDATE usuarios
+  SET rol = CASE
+    WHEN rol = 'ADMIN_ALMACEN' THEN 'director'
+    WHEN rol = 'OFICINA' THEN 'operario'
+    ELSE rol
+  END
+  WHERE rol IN ('ADMIN_ALMACEN','OFICINA');
 
-  IF NEW.cantidad > v_stock THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cantidad solicitada supera stock disponible.';
-  END IF;
-END$$
-
--- Evita modificar detalle en pedidos cerrados y revalida stock
-CREATE TRIGGER trg_detalle_pedido_before_update
-BEFORE UPDATE ON detalle_pedidos
-FOR EACH ROW
-BEGIN
-  DECLARE v_estado VARCHAR(20);
-  DECLARE v_stock INT UNSIGNED;
-
-  SELECT estado INTO v_estado
-  FROM pedidos
-  WHERE id_pedido = NEW.id_pedido;
-
-  IF v_estado NOT IN ('PENDIENTE_APROBACION', 'PENDIENTE') THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo se puede modificar detalle de pedidos pendientes o en aprobacion.';
-  END IF;
-
-  SELECT stock_actual INTO v_stock
-  FROM productos
-  WHERE id_producto = NEW.id_producto;
-
-  IF NEW.cantidad > v_stock THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cantidad solicitada supera stock disponible.';
-  END IF;
-END$$
-
--- Al pasar un pedido a ENTREGADO, descuenta stock automáticamente
-CREATE TRIGGER trg_pedido_before_update
-BEFORE UPDATE ON pedidos
-FOR EACH ROW
-BEGIN
-  DECLARE v_faltantes INT DEFAULT 0;
-
-  IF OLD.estado = NEW.estado THEN
-    -- Permite updates de campos auxiliares sin cambio de estado
-    SET NEW.fecha_entrega = NEW.fecha_entrega;
-  ELSE
-    IF OLD.estado = 'PENDIENTE_APROBACION' AND NEW.estado NOT IN ('PENDIENTE', 'FUSIONADO', 'CANCELADO') THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transicion invalida desde PENDIENTE_APROBACION.';
-    ELSEIF OLD.estado = 'PENDIENTE' AND NEW.estado NOT IN ('ENTREGADO', 'CANCELADO') THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transicion invalida desde PENDIENTE.';
-    ELSEIF OLD.estado = 'ENTREGADO' AND NEW.estado <> 'ENTREGADO' THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No se permite revertir pedidos entregados.';
-    ELSEIF OLD.estado = 'FUSIONADO' AND NEW.estado <> 'FUSIONADO' THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No se permite cambiar pedidos fusionados.';
-    END IF;
-  END IF;
-
-  IF OLD.estado <> 'ENTREGADO' AND NEW.estado = 'ENTREGADO' THEN
-    -- Verifica stock suficiente antes de descontar
-    SELECT COUNT(*) INTO v_faltantes
-    FROM detalle_pedidos d
-    JOIN productos p ON p.id_producto = d.id_producto
-    WHERE d.id_pedido = OLD.id_pedido
-      AND d.cantidad > p.stock_actual;
-
-    IF v_faltantes > 0 THEN
-      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Stock insuficiente para completar la entrega del pedido.';
-    END IF;
-
-    -- Descuenta stock de cada producto del pedido
-    UPDATE productos p
-    JOIN detalle_pedidos d ON d.id_producto = p.id_producto
-    SET p.stock_actual = p.stock_actual - d.cantidad
-    WHERE d.id_pedido = OLD.id_pedido;
-
-    SET NEW.fecha_entrega = IFNULL(NEW.fecha_entrega, NOW());
-  END IF;
-END$$
-
+  ALTER TABLE usuarios
+    MODIFY COLUMN rol ENUM(
+      'inventarista',
+      'director',
+      'operario',
+      'paqueteria',
+      'secretario',
+      'director_general',
+      'almacenista'
+    ) NOT NULL DEFAULT 'operario';
+END $$
 DELIMITER ;
-
--- Migración segura para soportar áreas, roles y nuevos estados de pedido
--- (No borra datos; solo agrega compatibilidad)
-INSERT INTO areas (id_area, nombre, codigo, activa, created_at, updated_at)
-SELECT id_oficina, nombre, codigo, activa, created_at, updated_at
-FROM oficinas
-WHERE NOT EXISTS (
-  SELECT 1 FROM areas a WHERE a.id_area = oficinas.id_oficina
-)
-ON DUPLICATE KEY UPDATE
-  nombre = VALUES(nombre),
-  codigo = VALUES(codigo),
-  activa = VALUES(activa);
-
-SET @has_id_area = (
-  SELECT COUNT(*)
-  FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE()
-    AND TABLE_NAME = 'usuarios'
-    AND COLUMN_NAME = 'id_area'
-);
-
-SET @sql_area = IF(@has_id_area = 0, 'ALTER TABLE usuarios ADD COLUMN id_area INT UNSIGNED NULL AFTER id_oficina', 'SELECT 1');
-PREPARE stmt_area FROM @sql_area;
-EXECUTE stmt_area;
-DEALLOCATE PREPARE stmt_area;
-
-UPDATE usuarios u
-LEFT JOIN areas a ON a.id_area = u.id_oficina
-SET u.id_area = u.id_oficina
-WHERE u.id_area IS NULL AND u.id_oficina IS NOT NULL AND u.id_oficina IN (SELECT id_oficina FROM oficinas);
-
-UPDATE usuarios
-SET rol = CASE
-  WHEN rol = 'ADMIN_ALMACEN' THEN 'director'
-  WHEN rol = 'OFICINA' THEN 'operario'
-  ELSE rol
-END
-WHERE rol IN ('ADMIN_ALMACEN','OFICINA');
-
-ALTER TABLE usuarios
-  MODIFY COLUMN rol ENUM(
-    'inventarista',
-    'director',
-    'operario',
-    'paqueteria',
-    'secretario',
-    'director_general',
-    'almacenista'
-  ) NOT NULL DEFAULT 'operario';
 
 CREATE TABLE IF NOT EXISTS producto_area (
   id_producto INT UNSIGNED NOT NULL,
   id_area INT UNSIGNED NOT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (id_producto, id_area),
   KEY idx_producto_area_area (id_area),
   CONSTRAINT fk_producto_area_producto
@@ -330,7 +272,16 @@ SET estado = 'PENDIENTE_APROBACION'
 WHERE estado = 'CANCELADO';
 
 ALTER TABLE pedidos
-  MODIFY COLUMN estado ENUM('PENDIENTE_APROBACION','PENDIENTE','ENTREGADO','CANCELADO','FUSIONADO') NOT NULL DEFAULT 'PENDIENTE_APROBACION';
+  MODIFY COLUMN estado ENUM(
+    'PENDIENTE_APROBACION',
+    'PENDIENTE_DIRECTOR',
+    'LISTO_DESPACHO',
+    'PENDIENTE',
+    'ENTREGADO',
+    'RECHAZADO',
+    'CANCELADO',
+    'FUSIONADO'
+  ) NOT NULL DEFAULT 'PENDIENTE_APROBACION';
 
 -- Datos mínimos de ejemplo (opcional)
 INSERT IGNORE INTO oficinas (nombre, codigo) VALUES
